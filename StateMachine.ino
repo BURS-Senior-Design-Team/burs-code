@@ -10,30 +10,32 @@ long demo_uv_b[25];
 long demo_uv_c[25];
 long demo_int_temp[25];
 long demo_ext_temp[25];
-int test_it = 0;  //iterator for testing state machine
+int test_it;  //iterator for testing state machine
 
 //Recorded Data Points
 unsigned long start_time;
-unsigned long current_time;
+unsigned long period_timer;
+unsigned long long current_time;
 unsigned long timer;
-const unsigned long timer_check = 4000; //used for checking period of descent time set to 4 seconds for now
-const unsigned long flight_time = 10000; //used for ensuring balloon has been in flight for more enough time to have reached the 10,000 foot descent altitude for turning the system off 12hrs = 43,200,000
-double altitude=0;
-double uv_a;
-double uv_b;
-double uv_c;
-double SystemTemp;
-double ExternalTemp;
-double heat_cont;
+const unsigned long timer_check = 3000; //used for checking period of descent time set to 4 seconds for now
+const unsigned long flight_time = 5000; //used for ensuring balloon has been in flight for more enough time to have reached the 10,000 foot descent altitude for turning the system off 12hrs = 43,200,000
+long altitude;
+long uv_a;
+long uv_b;
+long uv_c;
+long SystemTemp;
+long ExternalTemp;
+long heat_cont;
 
-int sample_rate = 1;//hz
+double sample_rate = 1;//hz
+double period;
 
 void setup() {
 
 Serial.begin(115200);
 start_time = millis();
-
-//pinhigh for sensor package transistor gate
+period_timer = start_time;
+pinmode(8, OUTPUT);//pinhigh for sensor package transistor gate
 //initialize led function
 
 //creating arrays for testing purposes
@@ -77,38 +79,45 @@ for(int i=20; i<=25; i++){
   demo_int_temp[i] = 65;
   demo_ext_temp[i] = 65;
   }
-Serial.print ('In Arm State');
+Serial.print ("ARM STATE, ");
+test_it = 0;
+altitude = 0;
 }
 
 void loop() {
 
   switch (state) {
 
-    //In ARM state sample rate = 1hz, recording altitude and time to SD
+    //In ARM state sample rate = 1hz
     //will change to UV state when altitude reaches 100ft
     case ARM:
 
       sample_rate = 1;//hz
-      //handle scientific data
-      if(current_time % ((1/sample_rate)*1000)){
-        get_time(current_time);
-        get_UVA(test_it, demo_uv_a, uv_a);
-        get_UVB(test_it, demo_uv_b, uv_b);
-        get_UVC(test_it, demo_uv_c, uv_c);
-        get_Altitude(test_it, testAltitude, altitude);
-        writeTime(current_time);
-        writeAltitude(altitude);
-        writeUVA(uv_a);
-        writeUVB(uv_b);
-        writeUVC(uv_c);
-        test_it++;
-      }
+      period = 1/sample_rate;
+      current_time = Sensor.get_time(current_time);
 
-        //turn on LED
+      //handle scientific data
+      if((current_time - period_timer) >= (period*1000)){
+        period_timer = current_time;
+        altitude = testAltitude[test_it];
+        uv_a = demo_uv_a[test_it];
+        uv_b = demo_uv_b[test_it];
+        uv_c = demo_uv_c[test_it];
+        sd.writeTime(current_time);
+        sd.writeAltitude(altitude);
+        sd.writeUVA(uv_a);
+        sd.writeUVB(uv_b);
+        sd.writeUVC(uv_c);
         
-      if (altitude >= 100) {
-        Serial.print ('Going to UV State,');
+        if (altitude >= 100) {
+        delay(1000);
+        Serial.print ("UV STATE, ");
         state = UV;
+        }
+        
+        else{
+          test_it = test_it + 1;
+        }
       }
       
       break;
@@ -119,30 +128,38 @@ void loop() {
     case UV:
 
       sample_rate = 4;//hz
+      period = 1/sample_rate;
+    
+      current_time = Sensor.get_time(current_time);
       
       //handle scientific data
-      if(current_time % ((1/sample_rate)*1000)){
-        get_time(current_time);
-        get_UVA(test_it, demo_uv_a, uv_a);
-        get_UVB(test_it, demo_uv_b, uv_b);
-        get_UVC(test_it, demo_uv_c, uv_c);
-        get_Altitude(test_it, testAltitude, altitude);
-        writeTime(current_time);
-        writeAltitude(altitude);
-        writeUVA(uv_a);
-        writeUVB(uv_b);
-        writeUVC(uv_c);
-        test_it++;
+      if((current_time - period_timer) >= (period*1000)){
+        period_timer = current_time;       
+        altitude = testAltitude[test_it];
+        uv_a = demo_uv_a[test_it];
+        uv_b = demo_uv_b[test_it];
+        uv_c = demo_uv_c[test_it];
+        sd.writeTime(current_time);
+        sd.writeAltitude(altitude);
+        sd.writeUVA(uv_a);
+        sd.writeUVB(uv_b);
+        sd.writeUVC(uv_c);
+        
+        if (altitude >= 90000) {
+          delay(1000);
+          Serial.print("FLOAT STATE, ");
+          test_it = test_it + 1;
+          state = FLOAT;
+        }
+
+        else{
+          test_it = test_it + 1;
+        }
       }
 
       //record internal temp
       //record external temp
       //record heater voltage
-      
-      if (altitude >= 90000) {
-        Serial.print('Going to Float State');
-        state = FLOAT;
-      }
 
       break;
 
@@ -153,52 +170,62 @@ void loop() {
     case FLOAT:
 
       sample_rate = 1;//hz
+      period = 1/sample_rate;
       
-      //handle scientific data
-      if(current_time % ((1/sample_rate)*1000)){
-        get_time(current_time);
-        get_UVA(test_it, demo_uv_a, uv_a);
-        get_UVB(test_it, demo_uv_b, uv_b);
-        get_UVC(test_it, demo_uv_c, uv_c);
-        get_Altitude(test_it, testAltitude, altitude);
-        writeTime(current_time);
-        writeAltitude(altitude);
-        writeUVA(uv_a);
-        writeUVB(uv_b);
-        writeUVC(uv_c);
-        test_it++;
+      current_time = Sensor.get_time(current_time);
+      
+      //handle scientific data during normal floating operation
+      if((current_time - period_timer) >= (period*1000)){
+        period_timer = current_time;       
+        altitude = testAltitude[test_it];
+        uv_a = demo_uv_a[test_it];
+        uv_b = demo_uv_b[test_it];
+        uv_c = demo_uv_c[test_it];
+        sd.writeTime(current_time);
+        sd.writeAltitude(altitude);
+        sd.writeUVA(uv_a);
+        sd.writeUVB(uv_b);
+        sd.writeUVC(uv_c);
+        test_it = test_it + 1;
       }
-
+      
       if (altitude < 90000){
-        Serial.print('Checking if Descending,');//for demo
-        current_time = millis();  //if the altitude is below 90000 feet check the time
+        current_time = Sensor.get_time(current_time);  //if the altitude is below 90000 feet check the time
+        timer = millis();//start a timer for checking if we are actually descending
+        Serial.print("BELOW 90,000 FEET, ");//for demo
         
         while(altitude < 90000){  //will stay in this loop until 2 of the 3 conditions are met
+            
+          current_time = Sensor.get_time(current_time);
+
           //handle scientific data
-          if(current_time % ((1/sample_rate)*1000)){
-            get_time(current_time);
-            get_UVA(test_it, demo_uv_a, uv_a);
-            get_UVB(test_it, demo_uv_b, uv_b);
-            get_UVC(test_it, demo_uv_c, uv_c);
-            get_Altitude(test_it, testAltitude, altitude);
-            writeTime(current_time);
-            writeAltitude(altitude);
-            writeUVA(uv_a);
-            writeUVB(uv_b);
-            writeUVC(uv_c);
-            test_it++;
+          if((current_time - period_timer) >= (period*1000)){
+            period_timer = current_time;       
+            altitude = testAltitude[test_it];
+            uv_a = demo_uv_a[test_it];
+            uv_b = demo_uv_b[test_it];
+            uv_c = demo_uv_c[test_it];
+            sd.writeTime(current_time);
+            sd.writeAltitude(altitude);
+            sd.writeUVA(uv_a);
+            sd.writeUVB(uv_b);
+            sd.writeUVC(uv_c);
+            test_it = test_it + 1;
           }
           
-          timer = millis();//start a timer for checking if we are actually descending
-          if((timer - current_time >= timer_check) && (altitude < 90000)){  //the balloon is below 90000 feet and has been for more than 5 seconds
+          if(((current_time - timer) >= timer_check) && (altitude < 90000)){  //the balloon is below 90000 feet and has been for more than 5 seconds
+            delay(1000);
+            Serial.print("DESCENT STATE, ");//for demo
             state = DES;    //change the state to the descent state
             break;          //exits the loop and will be in descent state next loop
           }
-          else if((timer - current_time <= timer_check) && (altitude < 90000)){ //balloon is still below 90000 feet but has not been for more than 5 seconds
+          
+          else if(((current_time - timer) <= timer_check) && (altitude < 90000)){ //balloon is still below 90000 feet but has not been for more than 5 seconds
             //will remain in the while loop and continue to check the time and altitude
           }
+          
           else{           //the altitude moves back up above 90000 feet(balloon is still in float)
-            test_it++;
+            test_it = test_it + 1;
             break;  //exits while loop and remains in float state
           }
             
@@ -211,38 +238,52 @@ void loop() {
       //will change to OFF state once we are below 10kft
       case DES:
 
-      sample_rate=16; //increase the sampling rate for the descent portion
+      sample_rate=4; //increase the sampling rate for the descent portion
+      period = 1/sample_rate;
 
-      //handle scientific data
-      if(current_time % ((1/sample_rate)*1000)){
-        get_time(current_time);
-        get_UVA(test_it, demo_uv_a, uv_a);
-        get_UVB(test_it, demo_uv_b, uv_b);
-        get_UVC(test_it, demo_uv_c, uv_c);
-        get_Altitude(test_it, testAltitude, altitude);
-        writeTime(current_time);
-        writeAltitude(altitude);
-        writeUVA(uv_a);
-        writeUVB(uv_b);
-        writeUVC(uv_c);
-        test_it++;
-      }
+      current_time = Sensor.get_time(current_time);
       
-      if (altitude <= 10,000) {
+      //handle scientific data
+      if((current_time - period_timer) >= (period*1000)){
+        period_timer = current_time;       
+        altitude = testAltitude[test_it];
+        uv_a = demo_uv_a[test_it];
+        uv_b = demo_uv_b[test_it];
+        uv_c = demo_uv_c[test_it];
+        sd.writeTime(current_time);
+        sd.writeAltitude(altitude);
+        sd.writeUVA(uv_a);
+        sd.writeUVB(uv_b);
+        sd.writeUVC(uv_c);
+
+        if (altitude <= 10000) {
         //turn off all sampling
         //turn off all recording
+        delay(1000);
+        Serial.print("OFF STATE, ");//for demo
         state = OFF;
+        break;
+        }
+        else{
+          test_it = test_it + 1;
+        }
       }
+
       break;
 
       //In OFF state sampling has been turned off and will end the flight if the time has been long enough
       case OFF:
 
-      current_time = millis();
+      current_time = Sensor.get_time(current_time);
+      
       if (current_time - start_time>=flight_time) {
+        delay(1000);
+        Serial.print("FLIGHT COMPLETE");//for demo
         //power down transistor and shuts power off;
       }
       else {  //if enough time has not passed to make sense for the balloon to be in the last part of descent it will go back to the descent state and continue taking data
+        delay(1000);
+        Serial.print("DESCENT STATE, ");//for demo
         state = DES;
         //turn sensing transistor back on
       }

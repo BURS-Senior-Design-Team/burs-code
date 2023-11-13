@@ -1,34 +1,21 @@
-void writeTime(unsigned long current_time){
-  Serial.print (current_time);
-  Serial.print (',');
-}
+#ifndef sd_card_h
+#define sd_card_h
 
-void writeAltitude(double altitude){
-  Serial.print (altitude);
-  Serial.print (',');
-}
+class sd_cardClass
+{
+  public:
+    sd_cardClass();
+    void writeTime(unsigned long current_time);
+    void writeAltitude(long altitude);
+    void writeUVA(long UVA);
+    void writeUVB(long UVB);
+    void writeUVC(long UVC);
+    void writeExternalTemp(long ExternalTemp);
+    void writeSystemTemp(long SystemTemp);
+    void writeScientific(unsigned long current_time, long altitude, long UVA, long UVB, long UVC);
+    
+};
 
-void writeUVA(double UVA){
-  Serial.print (UVA);
-  Serial.print (',');
-}
+extern sd_cardClass sd;
 
-void writeUVB(double UVB){
-  Serial.print (UVB);
-  Serial.print (',');
-}
-
-void writeUVC(double UVC){
-  Serial.print (UVC);
-  Serial.print (',');
-}
-
-void writeExternalTemp(double ExternalTemp){
-  Serial.print (ExternalTemp);
-  Serial.print (',');
-}
-
-void writeSystemTemp(double SystemTemp){
-  Serial.print (SystemTemp);
-  Serial.print (',');
-}
+#endif
