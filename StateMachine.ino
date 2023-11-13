@@ -297,6 +297,7 @@ void loop() {
       current_time = Sensor.get_time(current_time);
       
       if (current_time - start_time>=flight_time) {
+        led.OFF();
         delay(1000);
         Serial.print("FLIGHT COMPLETE");//for demo
         //power down transistor and shuts power off;

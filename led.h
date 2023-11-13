@@ -7,6 +7,7 @@ class ledClass
     ledClass();
     void SETUP();
     void BLINK();
+    void OFF();
 };
 
 extern ledClass led;

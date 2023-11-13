@@ -23,3 +23,7 @@ void ledClass::BLINK(){
     off = 1;
   }
 }
+
+void ledClass::OFF(){
+  digitalWrite(led_pin, LOW);
+}
