@@ -11,7 +11,7 @@ class SensorClass
     long get_Altitude(long testAltitude);
     long get_int_temp(int test_it, long demo_int_temp[], long int_temp);
     long get_ext_temp(int test_it, long demo_ext_temp[], long ext_temp);
-    unsigned long get_time(unsigned long long current_time);
+    unsigned long get_time(unsigned long current_time);
     
 };
 

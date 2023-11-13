@@ -43,7 +43,7 @@ long SensorClass::get_ext_temp(int test_it, long demo_ext_temp[], long ext_temp)
 }
 
 //function to get the current time
-unsigned long SensorClass::get_time(unsigned long long current_time){
+unsigned long SensorClass::get_time(unsigned long current_time){
   current_time = millis();
   return current_time;
 }
