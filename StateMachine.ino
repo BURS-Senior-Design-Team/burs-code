@@ -106,10 +106,12 @@ void loop() {
         led.BLINK();
         period_timer = current_time;
         altitude = testAltitude[test_it];
+        ExternalTemp = demo_ext_temp[test_it];
         uv_a = demo_uv_a[test_it];
         uv_b = demo_uv_b[test_it];
         uv_c = demo_uv_c[test_it];
         sd.writeTime(current_time);
+        sd.writeExternalTemp(ExternalTemp);
         sd.writeAltitude(altitude);
         sd.writeUVA(uv_a);
         sd.writeUVB(uv_b);
@@ -143,10 +145,12 @@ void loop() {
         led.BLINK();
         period_timer = current_time;       
         altitude = testAltitude[test_it];
+        ExternalTemp = demo_ext_temp[test_it];
         uv_a = demo_uv_a[test_it];
         uv_b = demo_uv_b[test_it];
         uv_c = demo_uv_c[test_it];
         sd.writeTime(current_time);
+        sd.writeExternalTemp(ExternalTemp);
         sd.writeAltitude(altitude);
         sd.writeUVA(uv_a);
         sd.writeUVB(uv_b);
@@ -186,10 +190,12 @@ void loop() {
         led.BLINK();
         period_timer = current_time;       
         altitude = testAltitude[test_it];
+        ExternalTemp = demo_ext_temp[test_it];
         uv_a = demo_uv_a[test_it];
         uv_b = demo_uv_b[test_it];
         uv_c = demo_uv_c[test_it];
         sd.writeTime(current_time);
+        sd.writeExternalTemp(ExternalTemp);
         sd.writeAltitude(altitude);
         sd.writeUVA(uv_a);
         sd.writeUVB(uv_b);
@@ -211,10 +217,12 @@ void loop() {
             led.BLINK();
             period_timer = current_time;       
             altitude = testAltitude[test_it];
-            uv_a = demo_uv_a[test_it];
-            uv_b = demo_uv_b[test_it];
-            uv_c = demo_uv_c[test_it];
-            sd.writeTime(current_time);
+            ExternalTemp = demo_ext_temp[test_it];
+        uv_a = demo_uv_a[test_it];
+        uv_b = demo_uv_b[test_it];
+        uv_c = demo_uv_c[test_it];
+        sd.writeTime(current_time);
+        sd.writeExternalTemp(ExternalTemp);
             sd.writeAltitude(altitude);
             sd.writeUVA(uv_a);
             sd.writeUVB(uv_b);
@@ -247,7 +255,7 @@ void loop() {
       //will change to OFF state once we are below 10kft
       case DES:
 
-      sample_rate=4; //increase the sampling rate for the descent portion
+      sample_rate=16; //increase the sampling rate for the descent portion
       period = 1/sample_rate;
 
       current_time = Sensor.get_time(current_time);
@@ -257,10 +265,12 @@ void loop() {
         led.BLINK();
         period_timer = current_time;       
         altitude = testAltitude[test_it];
+        ExternalTemp = demo_ext_temp[test_it];
         uv_a = demo_uv_a[test_it];
         uv_b = demo_uv_b[test_it];
         uv_c = demo_uv_c[test_it];
         sd.writeTime(current_time);
+        sd.writeExternalTemp(ExternalTemp);
         sd.writeAltitude(altitude);
         sd.writeUVA(uv_a);
         sd.writeUVB(uv_b);

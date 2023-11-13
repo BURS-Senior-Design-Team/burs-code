@@ -32,12 +32,12 @@ void sd_cardClass::writeUVC(long UVC){
 
 void sd_cardClass::writeExternalTemp(long ExternalTemp){
   Serial.print (ExternalTemp);
-  Serial.print (",");
+  Serial.print (" degrees F,");
 }
 
 void sd_cardClass::writeSystemTemp(long SystemTemp){
   Serial.print (SystemTemp);
-  Serial.print (",");
+  Serial.print (" degrees F, ");
 }
 void writeScientific(unsigned long current_time, long altitude, long UVA, long UVB, long UVC){
   Serial.print(current_time);
