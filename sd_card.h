@@ -10,8 +10,8 @@ class sd_cardClass
     void writeUVA(long UVA);
     void writeUVB(long UVB);
     void writeUVC(long UVC);
-    void writeExternalTemp(long ExternalTemp);
-    void writeSystemTemp(long SystemTemp);
+    void writeExternalTemp(float ExternalTemp);
+    void writeSystemTemp(float SystemTemp);
     void writeScientific(unsigned long current_time, long altitude, long UVA, long UVB, long UVC);
     
 };
