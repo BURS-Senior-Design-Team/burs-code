@@ -5,51 +5,52 @@
 sd_cardClass::sd_cardClass(){
 }
 
-void sd_cardClass::writeTime(unsigned long current_time){
-  Serial.print(current_time);
+void sd_cardClass::writeTime(){
+  Serial.print(sensor.current_time);
   Serial.print(" msec, ");
 }
 
-void sd_cardClass::writeAltitude(long altitude){
-  Serial.print(altitude);
+void sd_cardClass::writeAltitude(){
+  Serial.print(sensor.altitude);
   Serial.print(" m, ");
 }
 
-void sd_cardClass::writeUVA(long UVA){
-  Serial.print(UVA);
+void sd_cardClass::writeUVA(){
+  Serial.print(sensor.uv_a);
   Serial.print(" w/m^2, ");
 }
 
-void sd_cardClass::writeUVB(long UVB){
-  Serial.print (UVB);
+void sd_cardClass::writeUVB(){
+  Serial.print (sensor.uv_b);
   Serial.print(" w/m^2, ");
 }
 
-void sd_cardClass::writeUVC(long UVC){
-  Serial.print (UVC);
+void sd_cardClass::writeUVC(){
+  Serial.print (sensor.uv_c);
   Serial.print(" w/m^2, ");
 }
 
-void sd_cardClass::writeExternalTemp(float ExternalTemp){
-  Serial.print (ExternalTemp);
+void sd_cardClass::writeExternalTemp(){
+  Serial.print (sensor.external_temp);
   Serial.print (" degrees C,");
 }
 
-void sd_cardClass::writeSystemTemp(float SystemTemp){
-  Serial.print (SystemTemp);
+void sd_cardClass::writeInternalTemp(){
+  Serial.print (sensor.internal_temp);
   Serial.print (" degrees C, ");
 }
-void writeScientific(unsigned long current_time, long altitude, long UVA, long UVB, long UVC){
-  Serial.print(current_time);
-  Serial.print(" msec, ");
-  Serial.print(altitude);
-  Serial.print(" ft, ");
-  Serial.print(UVA);
-  Serial.print(" w/cm^2, ");
-  Serial.print (UVB);
-  Serial.print(" w/cm^2, ");
-  Serial.print (UVC);
-  Serial.print(" w/cm^2, ");
+void sd_cardClass::writeScientific(){
+  Serial.print("Scientific Data: ");
+  writeTime();
+  writeAltitude();
+  writeUVA();
+  Serial.println();
 }
 
+void sd_cardClass::writeHouseKeeping(){
+  Serial.print("HouseKeeping Data: ");
+  writeTime();
+  writeInternalTemp();
+  Serial.println();
+}
 sd_cardClass sd = sd_cardClass();

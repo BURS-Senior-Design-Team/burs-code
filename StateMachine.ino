@@ -1,14 +1,8 @@
 #include "sensor.h"
 #include "sd_card.h"
 #include "led.h"
-#include <Adafruit_DPS310.h>
-#include "RTClib.h"
 
-//Sensor Declaration
-Adafruit_DPS310 dps;  //Altimeter
-RTC_DS3231 rtc;       //Real Time Clock
-
-enum State {ARM, CLIMB, FLOAT, DESCENT, CHECK, OFF};  // Define the states
+enum State {ARM,GROUND, CLIMB, FLOAT, DESCENT, CHECK, OFF};  // Define the states
 State state = ARM;  // Start in the OFF state
 
 //!!!ENSURE PROPER DATA LOADED PREFLIGHT!!!
@@ -16,178 +10,138 @@ float seaLevelhPa = 1013.65;               //preasure in hectoPascals at sealeve
 const unsigned long flight_time = 25;   //hours; used for ensuring balloon has been in flight for more enough 
                                           //time to have reached the 10,000 foot descent altitude for 
                                           //turning the system off 12hrs = 43,200,000*/
-float climbing_altitude = 655;            //altitude to start ascent
-float floating_altitude= 657;             //altitude to slow recording during floating
-float descending_altitude= 656;           //altitude to increase recording rate during descent
-float off_altitude = 655;                 //altitude to turn of sensing package
+float climbing_altitude = 30;            //meters altitude above ground level to start ascent sampling frequency
+float floating_altitude= 26000;          //meters altitude above ground level to slow recording rate during floating
+float descending_altitude= 25000;        //meters altitude above ground level to increase recording rate during descent
+float off_altitude = 1000;               //meters altitude to stop communicating over sda and scl lines to sensing package
 float End_day = 0;
 float End_hour = 0;
 float End_minute = 0;
 float End_second = 45;
 const unsigned long timer_check = 3000; //used for checking period of descent time set to 3 seconds for now
-
-//Recorded Data Points
-unsigned long period_timer;
-unsigned long current_time;
+float ground_altitude = 0;
 unsigned long timer;
-float altitude = 0;
-long uv_a;
-long uv_b;
-long uv_c;
-float SystemTemp;
-long ExternalTemp;
-long heat_cont;
+
 bool End_of_flight = false;
 
-double sample_rate = 1;//hz
-double period;
+
 
 void setup() {
-
   Serial.begin(115200);
-
-//Real Time Clock Setup used only to reference for the shutdown protocall
-    if (! rtc.begin()) {
-      Serial.println("Couldn't find RTC");
-      Serial.flush();
-      abort();
-    }
-    Serial.println("RTC Connected");
-    //Resets time to current time
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   
-    // Disable and clear both alarms
-    rtc.disableAlarm(1);
-    rtc.clearAlarm(1);
-         
-    DateTime now = rtc.now(); // Get current time
+  // Setup Connection with Sensors  
+  sensor.Setup_Sensors();
 
-    // Print flight date and time at startup
-    char buff[] = "Start time is hh:mm:ss DDD, DD MMM YYYY";
-    Serial.println(now.toString(buff));
-
-//led setup
-    led.SETUP();//set up for LED blinking
-
-//Altimeter Setup
-    if (! dps.begin_I2C()) {             // Can pass in I2C address here
-      Serial.println("Failed to find DPS");
-      abort();
-    }
-    Serial.println("Altimeter Connected");
-  
-    // Setup highest precision
-    dps.configurePressure(DPS310_64HZ, DPS310_64SAMPLES);
-    dps.configureTemperature(DPS310_64HZ, DPS310_64SAMPLES);
-
-  
-  Serial.print ("ARM STATE, ");
+  // Setup led connections
+  led.SETUP();//set up for LED blinking
+  Serial.print ("GROUND STATE, ");
     
 }
 
 void loop() {
   
-  DateTime now = rtc.now(); // Get current time
-  
   switch (state) {
 
-    //In ARM state sample rate = 1hz
-    //will change to UV state when altitude reaches 100ft
+//In ARM state there is no data handling
+//Handles LED indication
+//Changes to GROUND state when all sensors have been connected
+
     case ARM:
 
-      sample_rate = 1;//hz
-      period = 1/sample_rate;
-      current_time = Sensor.get_time(current_time);
+      //determine if trigger has changed
+      sensor.Frequency(sensor.Arm_Frequency);
+      
+      led.LED_Indicator();
 
+      //when all sensors are connect will move to next state
+      if(sensor.All_Sensors_Connected == true){
+            sensor.get_altitude(seaLevelhPa);
+            ground_altitude = sensor.altitude;
+            state = GROUND;
+            Serial.print ("ARM STATE, ");
+      }
+
+      //if not all sensors are connected will try to reconnect
+      else{
+        sensor.Setup_Sensors();
+      }
+
+    break;
+
+//In GROUND state sample rate = 1hz
+//will change to UV state when altitude reaches 100ft
+
+    case GROUND:
+
+      //determine if trigger has changed
+      sensor.Frequency(sensor.Ground_Frequency);
+      
       // Check if alarm by polling by using alarmFired
-      if (rtc.alarmFired(1) == true){
+/*      if (rtc.alarmFired(1) == true){
         End_of_flight = true;
         Serial.println("EoF");
         rtc.clearAlarm(1);
       }
-      
-      //handle scientific data
-      if((current_time - period_timer) >= (period*1000)){
-        led.BLINK();
-        period_timer = current_time;
-        altitude = dps.readAltitude(seaLevelhPa);
-        SystemTemp = rtc.getTemperature();
-        //ExternalTemp = demo_ext_temp[test_it];
-        //uv_a = demo_uv_a[test_it];
-        //uv_b = demo_uv_b[test_it];
-        //uv_c = demo_uv_c[test_it];
-        sd.writeTime(current_time);
-        //sd.writeExternalTemp(ExternalTemp);
-        sd.writeAltitude(altitude);
-        sd.writeSystemTemp(SystemTemp);
-        //sd.writeUVA(uv_a);
-        //sd.writeUVB(uv_b);
-        //sd.writeUVC(uv_c);
-        
-        if (altitude >= climbing_altitude) {
-        Serial.print ("Clibing State, ");
+*/      
+      //read and save data
+      if(sensor.trigger ==true){
+          sensor.get_Scientific(seaLevelhPa);
+          sensor.get_HouseKeeping();
+          sd.writeScientific();
+          sd.writeHouseKeeping();
+
+        //Will move to next state when balloon is 30 meters above the ground      
+        if (sensor.altitude >= (ground_altitude + climbing_altitude)) {
+            Serial.print ("Clibing State, ");
         
         // Start alarm timing for predicting end of flight time
-        rtc.setAlarm1(now + TimeSpan(End_day, End_hour, End_minute, End_second), DS3231_A1_Second); // In 10 seconds time
+//        rtc.setAlarm1(now + TimeSpan(End_day, End_hour, End_minute, End_second), DS3231_A1_Second); // In 10 seconds time
 
-        state = CLIMB;
+            state = CLIMB;
         }
         
         else{
-          break;
+            break;
         }
       }
       
       break;
 
 
-    //In CLIMB state sample rate = 4hz, recording UV data, altitude, time, external temp, internal temp, and heater control voltage
-    //will change to Float state when reaching ceiling of 90kft
+
+//In CLIMB state sample rate = 4hz, recording UV data, altitude, time, external temp, internal temp, and heater control voltage
+//will change to Float state when reaching ceiling of 90kft
+
     case CLIMB:
 
-      sample_rate = 4;//hz
-      period = 1/sample_rate;
-    
-      current_time = Sensor.get_time(current_time);
-
+      //determine if trigger has changed
+      sensor.Frequency(sensor.Climb_Frequency);
+      
       // Check if alarm by polling by using alarmFired
-      if (rtc.alarmFired(1) == true){
+/*      if (rtc.alarmFired(1) == true){
         End_of_flight = true;
         rtc.clearAlarm(1);
       }
-      
-      //handle scientific data
-      if((current_time - period_timer) >= (period*1000)){
-        led.BLINK();
-        period_timer = current_time;
-        altitude = dps.readAltitude(seaLevelhPa);
-        //ExternalTemp = demo_ext_temp[test_it];
-        //uv_a = demo_uv_a[test_it];
-        //uv_b = demo_uv_b[test_it];
-        //uv_c = demo_uv_c[test_it];
-        sd.writeTime(current_time);
-        //sd.writeExternalTemp(ExternalTemp);
-        sd.writeAltitude(altitude);
-        //sd.writeUVA(uv_a);
-        //sd.writeUVB(uv_b);
-        //sd.writeUVC(uv_c);
-        
-        if (altitude >= floating_altitude) {
-          delay(1000);
-          Serial.print("FLOAT STATE, ");
-          state = FLOAT;
+*/      
+      //Read and save data
+      if(sensor.trigger == true){
+          sensor.get_Scientific(seaLevelhPa);
+          sensor.get_HouseKeeping();
+          sd.writeScientific();
+          sd.writeHouseKeeping();
+
+        //Will move to next state when balloon is at 26 km compared to sea level
+        if (sensor.altitude >= floating_altitude) {
+            Serial.print("FLOAT STATE, ");
+            state = FLOAT;
         }
 
         else{
-          break;
+            break;
         }
       }
-
-      //record internal temp
-      //record external temp
-      //record heater voltage
-
       break;
+
 
 
     //In Float state sample rate = 1hz
@@ -195,153 +149,125 @@ void loop() {
     //will change to CHECK state once we are below 90kft
     case FLOAT:
 
-      sample_rate = 1;//hz
-      period = 1/sample_rate;
+      //determine if trigger has changed
+      sensor.Frequency(sensor.Float_Frequency);
       
-      current_time = Sensor.get_time(current_time);
-
       // Check if alarm by polling by using alarmFired
-      if (rtc.alarmFired(1) == true){
+/*      if (rtc.alarmFired(1) == true){
         End_of_flight = true;
         Serial.println("Eof");
         rtc.clearAlarm(1);
       }
-      
+*/      
       //handle scientific data during normal floating operation
-      if((current_time - period_timer) >= (period*1000)){
-        led.BLINK();
-        period_timer = current_time;
-        altitude = dps.readAltitude(seaLevelhPa);
-        //ExternalTemp = demo_ext_temp[test_it];
-        //uv_a = demo_uv_a[test_it];
-        //uv_b = demo_uv_b[test_it];
-        //uv_c = demo_uv_c[test_it];
-        sd.writeTime(current_time);
-        //sd.writeExternalTemp(ExternalTemp);
-        sd.writeAltitude(altitude);
-        //sd.writeUVA(uv_a);
-        //sd.writeUVB(uv_b);
-        //sd.writeUVC(uv_c);
-      }
+      if(sensor.trigger == true){
+          sensor.get_Scientific(seaLevelhPa);
+          sensor.get_HouseKeeping();
+          sd.writeScientific();
+          sd.writeHouseKeeping();
       
-      if (altitude < descending_altitude){
-        timer = millis();//start a timer for checking if we are actually descending
-        Serial.print("BELOW 90,000 FEET, ");//for demo
-        state = CHECK; //change state to check if the balloon is actually descending  
       }
-      
+      //Will move to next state when balloon is at 25 km compared to sea level
+      if (sensor.altitude < descending_altitude){
+          timer = millis();//start a timer for checking if we are actually descending
+          Serial.print("BELOW 90,000 FEET, ");//for demo
+          state = CHECK; //change state to check if the balloon is actually descending  
+      }
       break;
+
+
       
-      //In CHECK state sample rate = 1hz
-      //recording UVdata, altitude, time, external temp, internal temp and heater control voltage
-      //will change to DESCEND state once we are below 90kft and been there for long enough
+//In CHECK state sample rate = 1hz
+//recording UVdata, altitude, time, external temp, internal temp and heater control voltage
+//will change to DESCEND state once we are below 90kft and been there for long enough     
       case CHECK:
-
-        sample_rate = 1;
-        period = 1/sample_rate;
-
-        current_time = Sensor.get_time(current_time);
-
+      
+        //determine if trigger has changed
+        sensor.Frequency(sensor.Check_Frequency);
+        
         // Check if alarm by polling by using alarmFired
-        if (rtc.alarmFired(1) == true){
+/*        if (rtc.alarmFired(1) == true){
           End_of_flight = true;
           Serial.println("Eof");
           rtc.clearAlarm(1);
         }
-        
+*/        
         //handle scientific data
-        if((current_time - period_timer) >= (period*1000)){
-          led.BLINK();
-          period_timer = current_time;
-          altitude = dps.readAltitude(seaLevelhPa);
-          //ExternalTemp = demo_ext_temp[test_it];
-          //uv_a = demo_uv_a[test_it];
-          //uv_b = demo_uv_b[test_it];
-          //uv_c = demo_uv_c[test_it];
-          sd.writeTime(current_time);
-          //sd.writeExternalTemp(ExternalTemp);
-          sd.writeAltitude(altitude);
-          //sd.writeUVA(uv_a);
-          //sd.writeUVB(uv_b);
-          //sd.writeUVC(uv_c);
-        }
-        if(((current_time - timer) >= timer_check) && (altitude < descending_altitude)){  //the balloon is below 90000 feet and has been for more than 5 seconds
-          Serial.print("DESCENT STATE, ");//for demo
-          state = DESCENT;    //change the state to the descent state
-          break;          //exits the loop and will be in descent state next loop
-        }
+        if(sensor.trigger == true){
+          sensor.get_Scientific(seaLevelhPa);
+          sensor.get_HouseKeeping();
+          sd.writeScientific();
+          sd.writeHouseKeeping();
           
-        else if(((current_time - timer) <= timer_check) && (altitude < descending_altitude)){ //balloon is still below 90000 feet but has not been for more than 5 seconds
-          break;//will remain in the while loop and continue to check the time and altitude
-        }
+          if(((sensor.current_time - timer) >= timer_check) && (sensor.altitude < descending_altitude)){  //the balloon is below 25 km and has been for more than 5 seconds meaning the balloon is descending
+              Serial.print("DESCENT STATE, ");//for demo
+              state = DESCENT;    //change the state to the descent state
+              break;          //exits the loop and will be in descent state next loop
+          }
           
-        else{           //the altitude moves back up above 90000 feet(balloon is still in float)
-          Serial.print("FLOAT STATE, ");//for demo
-          state = FLOAT;    //change the state to the FLOAT state
-          break;
+          else if(((sensor.current_time - timer) <= timer_check) && (sensor.altitude < descending_altitude)){ //balloon is still below 25 km but has not been for more than 5 seconds meaning balloon may not be descending
+              break;//will remain in the while loop and continue to check the time and altitude
+          }
+          
+          else{           //the altitude moves back up above 25 kMm (balloon is still in float)
+              Serial.print("FLOAT STATE, ");//for demo
+              state = FLOAT;    //change the state to the FLOAT state
+              break;
+          }
         }
+        
+
+
       
-      //In DES state sample rate = 16Hz, recording UVdata, altitude, time, external temp, internal temp and heater control voltage
-      //will change to OFF state once we are below 10kft
+//In DES state sample rate = 16Hz, recording UVdata, altitude, time, external temp, internal temp and heater control voltage
+//will change to OFF state once we are below 10kft
+
       case DESCENT:
-
-      sample_rate=16; //increase the sampling rate for the descent portion
-      period = 1/sample_rate;
-
-      current_time = Sensor.get_time(current_time);
-
-      // Check if alarm by polling by using alarmFired
-      if (rtc.alarmFired(1) == true){
-        End_of_flight = true;
-        Serial.println("Eof");
-        rtc.clearAlarm(1);
-      }
       
-      //handle scientific data
-      if((current_time - period_timer) >= (period*1000)){
-        led.BLINK();
-        period_timer = current_time;
-        altitude = dps.readAltitude(seaLevelhPa);
-        //ExternalTemp = demo_ext_temp[test_it];
-        //uv_a = demo_uv_a[test_it];
-        //uv_b = demo_uv_b[test_it];
-        //uv_c = demo_uv_c[test_it];
-        sd.writeTime(current_time);
-        //sd.writeExternalTemp(ExternalTemp);
-        sd.writeAltitude(altitude);
-        //sd.writeUVA(uv_a);
-        //sd.writeUVB(uv_b);
-        //sd.writeUVC(uv_c);
-
-        if (altitude <= off_altitude) {
-        //turn off all sampling
-        //turn off all recording
-        Serial.print("OFF STATE, ");//for demo
-        state = OFF;
-        break;
+        //determine if trigger has changed
+        sensor.Frequency(sensor.Descent_Frequency);
+        
+        // Check if alarm by polling by using alarmFired
+/*      if (rtc.alarmFired(1) == true){
+          End_of_flight = true;
+          Serial.println("Eof");
+          rtc.clearAlarm(1);
         }
-        else{
-        }
-      }
+*/      
+        //handle scientific data
+        if(sensor.trigger == true){
+            sensor.get_Scientific(seaLevelhPa);
+            sensor.get_HouseKeeping();
+            sd.writeScientific();
+            sd.writeHouseKeeping();
 
+            //Will move to next state when balloon is at 1km above the ground level
+            if (sensor.altitude <= (ground_altitude + off_altitude)) {
+                Serial.print("OFF STATE, ");//for demo
+                state = OFF;
+                break;
+            }
+
+        }
+       
       break;
 
-      /*In OFF state sampling has been turned off and will end the flight if the time has been
-        long enough*/
-      case OFF:
 
-      current_time = Sensor.get_time(current_time);
+
+//In OFF state sampling has been turned off and will end the flight if the time has been long enough
       
-      if (End_of_flight == true) {
-        led.OFF();
-        //power down transistor and shuts power off;
-      }
-      else {  /*if enough time has not passed to make sense for the balloon to be in the last part of 
+      case OFF:
+     
+        if (End_of_flight == true) {
+            led.OFF();
+            //Turn off sensing
+        }
+        else {  /*if enough time has not passed to make sense for the balloon to be in the last part of 
                 descent it will go back to the descent state and continue taking data*/
-        Serial.print("DESCENT STATE, ");//for demo
-        state = DESCENT;
-        //turn sensing transistor back on
-      }
+            Serial.print("DESCENT STATE, ");//for demo
+            state = DESCENT;
+            //turn sensing transistor back on
+        }
       break;
   }
 }

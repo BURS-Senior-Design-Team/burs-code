@@ -1,18 +1,21 @@
 #ifndef sd_card_h
 #define sd_card_h
 
+#include "sensor.h"
+
 class sd_cardClass
 {
   public:
     sd_cardClass();
-    void writeTime(unsigned long current_time);
-    void writeAltitude(long altitude);
-    void writeUVA(long UVA);
-    void writeUVB(long UVB);
-    void writeUVC(long UVC);
-    void writeExternalTemp(float ExternalTemp);
-    void writeSystemTemp(float SystemTemp);
-    void writeScientific(unsigned long current_time, long altitude, long UVA, long UVB, long UVC);
+    void writeTime();
+    void writeAltitude();
+    void writeUVA();
+    void writeUVB();
+    void writeUVC();
+    void writeExternalTemp();
+    void writeInternalTemp();
+    void writeScientific();
+    void writeHouseKeeping();
     
 };
 
