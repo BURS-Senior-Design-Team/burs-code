@@ -75,8 +75,7 @@ void setup() {
   if ( ! ltr.init() ) {
     uva_connected = false;
   }
-  else{
-    Serial.println("UV_A Sensor Connected");        
+  else{     
     ltr.setMode(LTR390_MODE_UVS); //set sensor to UV sensing mode
     ltr.setGain(LTR390_GAIN_3);   //Set gain to 3
     ltr.setResolution(LTR390_RESOLUTION_16BIT); //Set Resolution
@@ -245,11 +244,10 @@ break;
           digitalWrite(8, LOW);
           
         }
-        //When balloon is above 26 kilometers go to next state, and set alarm for determining
+        //When balloon is 30 meters above the ground move to climb state and set alarm for determining
         //if balloon has been in flight long enough to stop reading files
-        if((altitude >= (656))){
+        if(altitude >= (ground_altitude + 30)){
           rtc.setAlarm1(rtc.now() + TimeSpan(0,0,2,30), DS3231_A1_Second);//set to 2.5 minutes for testing
-          Serial.println("to climb");
           state = CLIMB;
         }
     }
@@ -298,9 +296,8 @@ break;
         //close housekeeping file
         houseFile.close();
 
-        //When balloon is above 26 kilometers go to next state
-        if((altitude >= 668)){
-          Serial.println("to float");
+        //When balloon is above 26 kilometers go to FLOAT state
+        if(altitude >= 26000){
           state = FLOAT;
         }
     }
@@ -351,8 +348,7 @@ break;
         houseFile.close();
 
         //When balloon is below 25 kilometers go to check state
-        if((altitude <= 664)){
-          Serial.println("to check");
+        if(altitude <= 25000){
           timer = millis();
           state = CHECK;
         }
@@ -403,14 +399,14 @@ break;
         houseFile.close();
 
         //the balloon is below 25 km and has been for more than 5 seconds meaning the balloon is descending
-        if(((millis() - timer) >= descent_timer) && (altitude <= 664)){
+        if(((millis() - timer) >= descent_timer) && (altitude <= 25000)){
           Serial.println("to descent");
           state = DESCENT;    //change the state to the descent state
           break;          //exits the loop and will be in descent state next loop
         }
 
         //balloon is still below 25 km but has not been for more than 5 seconds meaning balloon may not be descending
-        else if(((millis() - timer) <= descent_timer) && (altitude <= 664)){ 
+        else if(((millis() - timer) <= descent_timer) && (altitude <= 25000)){ 
           Serial.println("stay in check");
           break;//will remain in the while loop and continue to check the time and altitude
         }
@@ -465,8 +461,8 @@ break;
         //close housekeeping file
         houseFile.close();
 
-        //When balloon is above 26 kilometers go to next state
-        if((altitude <= (648))){
+        //When balloon is below 1 kilometer from the ground go to Off state
+        if(altitude <= (ground_altitude + 1000)){
           Serial.println("OFF");
           state = OFF;
         }
@@ -479,9 +475,9 @@ break;
 //In OFF state sampling has been turned off and will end the flight if the time has been long enough
       
       case OFF:
-     
+
+        //check if the alarm has gone off
         if (rtc.alarmFired(1)) {
-          digitalWrite(2, HIGH);
             //Turn off sensing
             //stop all heating commands
             //stop sensing by sending no commands
