@@ -4,11 +4,13 @@
 #include <SPI.h>
 #include <SD.h>
 #include <LTR390.h>
+#include "guvbc31sm.h"
 
 //Sensor Declarations
 RTC_DS3231 rtc;       //Real Time Clock
 Adafruit_DPS310 dps;  //Altimeter
-LTR390 ltr = LTR390();  //UV-A Sensor
+LTR390 ltr = LTR390();//UV-A Sensor
+GUVB UVB;             //UV-B Sensor
 
 //State Machine Setup
 enum State {ARM, GROUND, CLIMB, FLOAT, DESCENT, CHECK, OFF};  // Define the states
@@ -77,17 +79,18 @@ void setup() {
   }
   else{     
     ltr.setMode(LTR390_MODE_UVS); //set sensor to UV sensing mode
-    ltr.setGain(LTR390_GAIN_3);   //Set gain to 3
-    ltr.setResolution(LTR390_RESOLUTION_16BIT); //Set Resolution
-    ltr.setThresholds(100, 1000);
-    ltr.configInterrupt(true, LTR390_MODE_UVS);
     uva_connected = true;
     digitalWrite(4,HIGH);
   }
 
   //Connect uvb
-  uvb_connected = true;
-  digitalWrite(5,HIGH);
+  if (!UVB.begin()){
+    uvb_connected = false;
+  }
+  else{
+    uvb_connected = true;
+    digitalWrite(5,HIGH);
+  }
   
   //Connect uvc
   uvc_connected = true;
@@ -168,15 +171,22 @@ switch (state) {
     else{
       Serial.println("UV_A Sensor Connected");        
       ltr.setMode(LTR390_MODE_UVS); //set sensor to UV sensing mode
-      ltr.setGain(LTR390_GAIN_3);   //Set gain to 3
-      ltr.setResolution(LTR390_RESOLUTION_16BIT); //Set Resolution
-      ltr.setThresholds(100, 1000);
-      ltr.configInterrupt(true, LTR390_MODE_UVS);
       uva_connected = true;
       digitalWrite(4,HIGH);
     }
   }
 
+  //try to connect uvb again
+  else if (!uvb_connected){
+    if (!UVB.begin()){
+      uvb_connected = false;
+    }
+    else{
+      uvb_connected = true;
+      digitalWrite(5,HIGH);
+    }
+  }
+ 
   //try to connect to altimeter again
   else if (!altimeter_connected){
       //connect to altimeter
@@ -205,6 +215,7 @@ break;
         float altitude = dps.readAltitude(seaLevelhPa);
         float current_time = millis();
         float uva =ltr.readUVS();
+        float uvb = UVB.getUV();
         float int_temp = rtc.getTemperature();
         
         //set time to check for next sample 
@@ -214,11 +225,13 @@ break;
         File dataFile = SD.open("sci.csv", FILE_WRITE);
         
         //write values to science data file
-        dataFile.print(current_time);
+        dataFile.print(current_time);   //Milliseconds
         dataFile.print(", ");
-        dataFile.print(altitude);
+        dataFile.print(altitude);       //Meters
         dataFile.print(", ");
-        dataFile.println(uva);
+        dataFile.print(uva);            //UV Count
+        dataFile.print(",");
+        dataFile.println(uvb);          //uW/cm^2
         
         //close science data file
         dataFile.close();
@@ -271,6 +284,7 @@ break;
         float altitude = dps.readAltitude(seaLevelhPa);
         float current_time = millis();
         float uva =ltr.readUVS();
+        float uvb = UVB.getUV();
         float int_temp = rtc.getTemperature();
         
         //set time to check for next sample 
@@ -280,11 +294,13 @@ break;
         File dataFile = SD.open("sci.csv", FILE_WRITE);
         
         //write values to science data file
-        dataFile.print(current_time);
+        dataFile.print(current_time);   //Milliseconds
         dataFile.print(", ");
-        dataFile.print(altitude);
+        dataFile.print(altitude);       //Meters
         dataFile.print(", ");
-        dataFile.println(uva);
+        dataFile.print(uva);            //UV Count
+        dataFile.print(",");
+        dataFile.println(uvb);          //uW/cm^2
         
         //close science data file
         dataFile.close();
@@ -301,7 +317,7 @@ break;
         houseFile.close();
 
         //When balloon is above 26 kilometers go to next state
-        if(altitude >= (ground_altitude + 19)){
+        if(altitude >= (ground_altitude + 16)){
           Serial.print("Goint to FLOAT at: ");
           Serial.print(altitude);
           Serial.println(" m");
@@ -325,6 +341,7 @@ break;
         float altitude = dps.readAltitude(seaLevelhPa);
         float current_time = millis();
         float uva =ltr.readUVS();
+        float uvb = UVB.getUV();
         float int_temp = rtc.getTemperature();
         
         //set time to check for next sample 
@@ -334,11 +351,13 @@ break;
         File dataFile = SD.open("sci.csv", FILE_WRITE);
         
         //write values to science data file
-        dataFile.print(current_time);
+        dataFile.print(current_time);   //Milliseconds
         dataFile.print(", ");
-        dataFile.print(altitude);
+        dataFile.print(altitude);       //Meters
         dataFile.print(", ");
-        dataFile.println(uva);
+        dataFile.print(uva);            //UV Count
+        dataFile.print(",");
+        dataFile.println(uvb);          //uW/cm^2
         
         //close science data file
         dataFile.close();
@@ -355,7 +374,7 @@ break;
         houseFile.close();
 
         //When balloon is below 25 kilometers go to check state
-        if(altitude <= (ground_altitude + 15)){
+        if(altitude <= (ground_altitude + 12)){
           Serial.print("Going to CHECK at: ");
           Serial.print(altitude);
           Serial.println(" m");
@@ -374,11 +393,11 @@ break;
       
       if ((millis() - previous_time) >= 1000){
         
-          
         //read all sensors
         float altitude = dps.readAltitude(seaLevelhPa);
         float current_time = millis();
         float uva =ltr.readUVS();
+        float uvb = UVB.getUV();
         float int_temp = rtc.getTemperature();
         
         //set time to check for next sample 
@@ -388,11 +407,13 @@ break;
         File dataFile = SD.open("sci.csv", FILE_WRITE);
         
         //write values to science data file
-        dataFile.print(current_time);
+        dataFile.print(current_time);   //Milliseconds
         dataFile.print(", ");
-        dataFile.print(altitude);
+        dataFile.print(altitude);       //Meters
         dataFile.print(", ");
-        dataFile.println(uva);
+        dataFile.print(uva);            //UV Count
+        dataFile.print(",");
+        dataFile.println(uvb);          //uW/cm^2
         
         //close science data file
         dataFile.close();
@@ -409,7 +430,7 @@ break;
         houseFile.close();
 
         //the balloon is below 25 km and has been for more than 5 seconds meaning the balloon is descending
-        if(((millis() - timer) >= descent_timer) && (altitude <= (ground_altitude + 10))){
+        if(((millis() - timer) >= descent_timer) && (altitude <= (ground_altitude + 12))){
           Serial.print("Going to DESCENT at: ");
           Serial.print(altitude);
           Serial.println(" m");
@@ -418,7 +439,7 @@ break;
         }
 
         //balloon is still below 25 km but has not been for more than 5 seconds meaning balloon may not be descending
-        else if(((millis() - timer) <= descent_timer) && (altitude <= (ground_altitude + 10))){ 
+        else if(((millis() - timer) <= descent_timer) && (altitude <= (ground_altitude + 12))){ 
           Serial.println("Staying in CHECK");
           break;//will remain in the while loop and continue to check the time and altitude
         }
@@ -446,6 +467,7 @@ break;
         float altitude = dps.readAltitude(seaLevelhPa);
         float current_time = millis();
         float uva =ltr.readUVS();
+        float uvb = UVB.getUV();
         float int_temp = rtc.getTemperature();
         
         //set time to check for next sample 
@@ -455,11 +477,13 @@ break;
         File dataFile = SD.open("sci.csv", FILE_WRITE);
         
         //write values to science data file
-        dataFile.print(current_time);
+        dataFile.print(current_time);   //Milliseconds
         dataFile.print(", ");
-        dataFile.print(altitude);
+        dataFile.print(altitude);       //Meters
         dataFile.print(", ");
-        dataFile.println(uva);
+        dataFile.print(uva);            //UV Count
+        dataFile.print(",");
+        dataFile.println(uvb);          //uW/cm^2
         
         //close science data file
         dataFile.close();
@@ -476,7 +500,7 @@ break;
         houseFile.close();
 
         //When balloon is above 26 kilometers go to next state
-        if(altitude <= (ground_altitude + 5)){
+        if(altitude <= (ground_altitude)){
           Serial.print("Going to OFF at: ");
           Serial.print(altitude);
           Serial.println(" m");
