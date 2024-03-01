@@ -4,11 +4,13 @@
 #include <SPI.h>
 #include <SD.h>
 #include <LTR390.h>
+#include "guvbc31sm.h"
 
 //Sensor Declarations
 RTC_DS3231 rtc;       //Real Time Clock
 Adafruit_DPS310 dps;  //Altimeter
-LTR390 ltr = LTR390();  //UV-A Sensor
+LTR390 ltr = LTR390();//UV-A Sensor
+GUVB UVB;             //UV-B Sensor
 
 //State Machine Setup
 enum State {ARM, GROUND, CLIMB, FLOAT, DESCENT, CHECK, OFF};  // Define the states
@@ -77,17 +79,18 @@ void setup() {
   }
   else{     
     ltr.setMode(LTR390_MODE_UVS); //set sensor to UV sensing mode
-    ltr.setGain(LTR390_GAIN_3);   //Set gain to 3
-    ltr.setResolution(LTR390_RESOLUTION_16BIT); //Set Resolution
-    ltr.setThresholds(100, 1000);
-    ltr.configInterrupt(true, LTR390_MODE_UVS);
     uva_connected = true;
     digitalWrite(4,HIGH);
   }
 
   //Connect uvb
-  uvb_connected = true;
-  digitalWrite(5,HIGH);
+  if (!UVB.begin()){
+    uvb_connected = false;
+  }
+  else{
+    uvb_connected = true;
+    digitalWrite(5,HIGH);
+  }
   
   //Connect uvc
   uvc_connected = true;
@@ -98,8 +101,6 @@ void setup() {
     altimeter_connected = false;
   }
   else{
-    dps.configurePressure(DPS310_64HZ, DPS310_64SAMPLES);
-    dps.configureTemperature(DPS310_64HZ, DPS310_64SAMPLES);
     ground_altitude = dps.readAltitude(seaLevelhPa);  //store altitude of ground level for state machine control
     altimeter_connected = true;
     digitalWrite(7, HIGH);
@@ -167,15 +168,22 @@ switch (state) {
     else{
       Serial.println("UV_A Sensor Connected");        
       ltr.setMode(LTR390_MODE_UVS); //set sensor to UV sensing mode
-      ltr.setGain(LTR390_GAIN_3);   //Set gain to 3
-      ltr.setResolution(LTR390_RESOLUTION_16BIT); //Set Resolution
-      ltr.setThresholds(100, 1000);
-      ltr.configInterrupt(true, LTR390_MODE_UVS);
       uva_connected = true;
       digitalWrite(4,HIGH);
     }
   }
 
+  //try to connect uvb again
+  else if (!uvb_connected){
+    if (!UVB.begin()){
+      uvb_connected = false;
+    }
+    else{
+      uvb_connected = true;
+      digitalWrite(5,HIGH);
+    }
+  }
+  
   //try to connect to altimeter again
   else if (!altimeter_connected){
       //connect to altimeter
@@ -184,8 +192,6 @@ switch (state) {
       digitalWrite(7,LOW);
     }
     else{
-      dps.configurePressure(DPS310_64HZ, DPS310_64SAMPLES);
-      dps.configureTemperature(DPS310_64HZ, DPS310_64SAMPLES);
       ground_altitude = dps.readAltitude(seaLevelhPa);  //store altitude of ground level for state machine control
       altimeter_connected = true;
       digitalWrite(7, HIGH);
@@ -204,6 +210,7 @@ break;
         float altitude = dps.readAltitude(seaLevelhPa);
         float current_time = millis();
         float uva =ltr.readUVS();
+        float uvb = UVB.getUV();
         float int_temp = rtc.getTemperature();
         
         //set time to check for next sample 
@@ -213,11 +220,13 @@ break;
         File dataFile = SD.open("sci.csv", FILE_WRITE);
         
         //write values to science data file
-        dataFile.print(current_time);
+        dataFile.print(current_time);   //Milliseconds
         dataFile.print(", ");
-        dataFile.print(altitude);
+        dataFile.print(altitude);       //Meters
         dataFile.print(", ");
-        dataFile.println(uva);
+        dataFile.print(uva);            //UV Count
+        dataFile.print(",");
+        dataFile.println(uvb);          //uW/cm^2
         
         //close science data file
         dataFile.close();
@@ -267,6 +276,7 @@ break;
         float altitude = dps.readAltitude(seaLevelhPa);
         float current_time = millis();
         float uva =ltr.readUVS();
+        float uvb = UVB.getUV();
         float int_temp = rtc.getTemperature();
         
         //set time to check for next sample 
@@ -276,11 +286,13 @@ break;
         File dataFile = SD.open("sci.csv", FILE_WRITE);
         
         //write values to science data file
-        dataFile.print(current_time);
+        dataFile.print(current_time);   //Milliseconds
         dataFile.print(", ");
-        dataFile.print(altitude);
+        dataFile.print(altitude);       //Meters
         dataFile.print(", ");
-        dataFile.println(uva);
+        dataFile.print(uva);            //UV Count
+        dataFile.print(",");
+        dataFile.println(uvb);          //uW/cm^2
         
         //close science data file
         dataFile.close();
@@ -318,6 +330,7 @@ break;
         float altitude = dps.readAltitude(seaLevelhPa);
         float current_time = millis();
         float uva =ltr.readUVS();
+        float uvb = UVB.getUV();
         float int_temp = rtc.getTemperature();
         
         //set time to check for next sample 
@@ -327,11 +340,13 @@ break;
         File dataFile = SD.open("sci.csv", FILE_WRITE);
         
         //write values to science data file
-        dataFile.print(current_time);
+        dataFile.print(current_time);   //Milliseconds
         dataFile.print(", ");
-        dataFile.print(altitude);
+        dataFile.print(altitude);       //Meters
         dataFile.print(", ");
-        dataFile.println(uva);
+        dataFile.print(uva);            //UV Count
+        dataFile.print(",");
+        dataFile.println(uvb);          //uW/cm^2
         
         //close science data file
         dataFile.close();
@@ -369,6 +384,7 @@ break;
         float altitude = dps.readAltitude(seaLevelhPa);
         float current_time = millis();
         float uva =ltr.readUVS();
+        float uvb = UVB.getUV();
         float int_temp = rtc.getTemperature();
         
         //set time to check for next sample 
@@ -378,11 +394,13 @@ break;
         File dataFile = SD.open("sci.csv", FILE_WRITE);
         
         //write values to science data file
-        dataFile.print(current_time);
+        dataFile.print(current_time);   //Milliseconds
         dataFile.print(", ");
-        dataFile.print(altitude);
+        dataFile.print(altitude);       //Meters
         dataFile.print(", ");
-        dataFile.println(uva);
+        dataFile.print(uva);            //UV Count
+        dataFile.print(",");
+        dataFile.println(uvb);          //uW/cm^2
         
         //close science data file
         dataFile.close();
@@ -432,6 +450,7 @@ break;
         float altitude = dps.readAltitude(seaLevelhPa);
         float current_time = millis();
         float uva =ltr.readUVS();
+        float uvb = UVB.getUV();
         float int_temp = rtc.getTemperature();
         
         //set time to check for next sample 
@@ -441,11 +460,13 @@ break;
         File dataFile = SD.open("sci.csv", FILE_WRITE);
         
         //write values to science data file
-        dataFile.print(current_time);
+        dataFile.print(current_time);   //Milliseconds
         dataFile.print(", ");
-        dataFile.print(altitude);
+        dataFile.print(altitude);       //Meters
         dataFile.print(", ");
-        dataFile.println(uva);
+        dataFile.print(uva);            //UV Count
+        dataFile.print(",");
+        dataFile.println(uvb);          //uW/cm^2
         
         //close science data file
         dataFile.close();
