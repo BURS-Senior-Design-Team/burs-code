@@ -1,28 +1,31 @@
-#include <Wire.h>
-#include <LTR390.h>
+#include "uva.h"
 
-
- LTR390 ltr390 = LTR390();
+//Create uva object
+UVAClass uva = UVAClass();
 
 void setup() {
-   Serial.begin(115200);
+  Serial.begin(115200);
   Wire.begin();
-  if(!ltr390.init()){
-    Serial.println("UV_A Not Connected");
+  //Test uva connection
+  Serial.println("----- UV-A Test -----");
+  
+  if(!uva.init()){
+    Serial.println("Failed to Connect to UVA");
   }
+  
   else{
-    Serial.println("UV_A Connected");
-    ltr390.setMode(LTR390_MODE_UVS);
+    Serial.println("UVA Connected");
   }
+ 
 
 }
 
 void loop() {
 
+  Serial.print ("UVA = ");
+  Serial.print (uva.readUVS());
+  Serial.println(" UV Count");
+   
+  delay(3000);
 
-         Serial.print("UV Index: "); 
-         Serial.println(ltr390.getUVI());
-
-      
-  
 }
