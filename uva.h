@@ -14,7 +14,6 @@
 #define LTR390_UVSDATA_MSB 0x11     ///< UVS data middle byte
 #define LTR390_UVSDATA_HSB 0x12     ///< UVS data highest byte
 
-
 #define  MODE_UVS 1
 
 //Gain settings for UVA sensor
@@ -36,9 +35,9 @@
 
 
 
-class UVAClass{
+class UVA{
 public:
-  UVAClass();
+  UVA();
   
   bool init();
 
@@ -47,7 +46,7 @@ public:
   void enable(bool en);
   bool enabled(void);
 
-  uint32_t readUVS(void);
+  uint32_t readUVA(void);
 
   uint8_t writeRegister(uint8_t reg, uint8_t val);
   uint8_t readRegister(uint8_t reg);

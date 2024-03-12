@@ -1,14 +1,15 @@
 #include "uva.h"
 
 //Create uva object
-UVAClass uva = UVAClass();
+UVA uva = UVA();
 
 void setup() {
   Serial.begin(115200);
   Wire.begin();
-  //Test uva connection
-  Serial.println("----- UV-A Test -----");
   
+  Serial.println("----- UV-A Test -----");
+
+  //Test uva connection
   if(!uva.init()){
     Serial.println("Failed to Connect to UVA");
   }
@@ -16,14 +17,12 @@ void setup() {
   else{
     Serial.println("UVA Connected");
   }
- 
-
 }
 
 void loop() {
 
   Serial.print ("UVA = ");
-  Serial.print (uva.readUVS());
+  Serial.print (uva.readUVA());
   Serial.println(" UV Count");
    
   delay(3000);
