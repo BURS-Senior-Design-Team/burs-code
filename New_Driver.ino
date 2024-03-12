@@ -49,7 +49,6 @@ void setup() {
   pinMode(5, OUTPUT);         //uv-c led indicator
   pinMode(6, OUTPUT);         //altimeter led indicator
   pinMode(7, OUTPUT);         //sd reader/writer led indicator
-  pinMode(8, OUTPUT);         //external thermistor indicator
   
   //connect to sd writer
   pinMode(10, OUTPUT);//chipselect pin of 10
@@ -256,7 +255,7 @@ break;
         //When balloon is 30 meters above the ground move to climb state and set alarm for determining
         //if balloon has been in flight long enough to stop reading files
         if(altitude >= (ground_altitude + 30)){
-          rtc.setAlarm1(rtc.now() + TimeSpan(0,0,2,30), DS3231_A1_Second);//set to 2.5 minutes for testing
+          rtc.setAlarm1(rtc.now() + TimeSpan(0,0,2,30), DS3231_A1_Second);//set to expected flight time
           state = CLIMB;
         }
     }
