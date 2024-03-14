@@ -25,10 +25,21 @@ float previous_time = 0;
 //values to check if balloon is descending or floating lower base on time
 float descent_timer = 5000; //5 seconds
 float timer = 0;  //set at end of float state
+float projected_flight_time = 36000000;//set for ten hours from the time the balloon leaves the ground
 
 //value to know the zero altitude where ballon starts from
 float ground_altitude =0;
 float start_time = 0;
+float flight_start = 0;
+
+//Data Variables
+float current_time;
+float altitude;
+float uva;
+float uvb;
+float uvc;
+float int_temp;
+float ext_temp;
 
 //flags for determining connection
 bool sd_connected = false;
@@ -37,7 +48,8 @@ bool uva_connected = false;
 bool uvb_connected = false;
 bool uvc_connected = false;
 bool altimeter_connected = false;
-
+bool blink_off = true;
+bool led_off = true;
 
 void setup() {
   Serial.begin(115200);
@@ -120,7 +132,6 @@ switch (state) {
 
   //if all sensors are connected and sd card inserted will move to ground and begin sampling data
   if (sd_connected && rtc_connected && uva_connected && uvb_connected && uvc_connected && altimeter_connected) {
-    
     // Print flight date and time at startup
     DateTime now = rtc.now(); // Get current time  
     char buff[] = "Start time is hh:mm:ss DDD, DD MMM YYYY";
@@ -128,6 +139,7 @@ switch (state) {
     time_stamp.println(now.toString(buff));  
     time_stamp.close(); 
     start_time = millis();
+    led_off = false;
     state = GROUND;
   }
 
@@ -202,62 +214,79 @@ break;
 //In GROUND state sample rate = 1hz
 //will change to UV state when altitude reaches 30 meters above ground level
 
-    case GROUND:
+case GROUND:
+
+      //after being on for 10 minutes the leds will turn off
+      if((current_time-start_time) >= 30000){                  //set to 5 seconds for testing
+        digitalWrite(2, LOW);
+        digitalWrite(3, LOW);
+        digitalWrite(4, LOW);
+        digitalWrite(5, LOW);
+        digitalWrite(6, LOW);
+        digitalWrite(7, LOW);
+        digitalWrite(8, LOW);
+        led_off = true;   
+      }
+      
       if ((millis() - previous_time) >= 1000){
-                  
-        //read all sensors
-        float altitude = dps.readAltitude(seaLevelhPa);
-        float current_time = millis();
-        float uva =ltr.readUVS();
-        float uvb = UVB.getUV();
-        float int_temp = rtc.getTemperature();
-        
-        //set time to check for next sample 
-        previous_time = current_time;
 
-        //open science data file
-        File dataFile = SD.open("sci.csv", FILE_WRITE);
+          //read all sensors
+          altitude = dps.readAltitude(seaLevelhPa);
+          current_time = millis();
+          uva =ltr.readUVS();
+          uvb = UVB.getUV();
+          int_temp = rtc.getTemperature();
         
-        //write values to science data file
-        dataFile.print(current_time);   //Milliseconds
-        dataFile.print(", ");
-        dataFile.print(altitude);       //Meters
-        dataFile.print(", ");
-        dataFile.print(uva);            //UV Count
-        dataFile.print(",");
-        dataFile.println(uvb);          //uW/cm^2
-        
-        //close science data file
-        dataFile.close();
+          //set time to check for next sample 
+          previous_time = current_time;
 
-        //open housekeeping data file
-        File houseFile = SD.open("house.csv", FILE_WRITE);
+          //open science data file
+          File dataFile = SD.open("sci.csv", FILE_WRITE);
+        
+          //write values to science data file
+          dataFile.print(current_time);   //Milliseconds
+          dataFile.print(", ");
+          dataFile.print(altitude);       //Meters
+          dataFile.print(", ");
+          dataFile.print(uva);            //UV Count
+          dataFile.print(",");
+          dataFile.println(uvb);          //uW/cm^2
+        
+          //close science data file
+          dataFile.close();
 
-        //write values to housekeeping file
-        houseFile.print(current_time);
-        houseFile.print(",");
-        houseFile.println(int_temp);
+          //open housekeeping data file
+          File houseFile = SD.open("house.csv", FILE_WRITE);
+
+          //write values to housekeeping file
+          houseFile.print(current_time);
+          houseFile.print(",");
+          houseFile.println(int_temp);
         
-        //close housekeeping file
-        houseFile.close();
-        
-        //after being on for 10 minutes the leds will turn off
-        if((current_time-start_time) >= 5000){                  //set to 5 seconds for testing
-          digitalWrite(2, LOW);
-          digitalWrite(3, LOW);
-          digitalWrite(4, LOW);
-          digitalWrite(5, LOW);
-          digitalWrite(6, LOW);
-          digitalWrite(7, LOW);
-          digitalWrite(8, LOW);
-          
-        }
-        //When balloon is 30 meters above the ground move to climb state and set alarm for determining
-        //if balloon has been in flight long enough to stop reading files
-        if(altitude >= (ground_altitude + 30)){
-          rtc.setAlarm1(rtc.now() + TimeSpan(0,0,2,30), DS3231_A1_Second);//set to expected flight time
-          state = CLIMB;
-        }
+          //close housekeeping file
+          houseFile.close();
+
+          //"heart beat" led function
+          if (led_off = true){
+            
+            if (blink_off = false){
+              digitalWrite(8,HIGH);
+              blink_off = true;
+            }
+            
+            else if(blink_off = true){
+            digitalWrite(8,LOW);
+            blink_off = false;         
+            }
+          }
+
+          //When balloon is 30 meters above the ground move to climb state and set alarm for determining
+          //if balloon has been in flight long enough to stop reading files
+          if(altitude >= (ground_altitude + 30)){
+            flight_start = current_time;
+            digitalWrite(8, LOW);
+            state = CLIMB;
+          }
     }
 break;
 
@@ -267,50 +296,53 @@ break;
 //In CLIMB state sample rate = 4hz, recording UV data, altitude, time, external temp, internal temp, and heater control voltage
 //will change to Float state when reaching ceiling of 26kilometers
 
-    case CLIMB:
+case CLIMB:
+
       if ((millis() - previous_time) >= 250){
         
-          
-        //read all sensors
-        float altitude = dps.readAltitude(seaLevelhPa);
-        float current_time = millis();
-        float uva =ltr.readUVS();
-        float uvb = UVB.getUV();
-        float int_temp = rtc.getTemperature();
+          //read all sensors
+          altitude = dps.readAltitude(seaLevelhPa);
+          current_time = millis();
+          uva =ltr.readUVS();
+          uvb = UVB.getUV();
+          int_temp = rtc.getTemperature();
         
-        //set time to check for next sample 
-        previous_time = current_time;
+          //set time to check for next sample 
+          previous_time = current_time;
 
-        //open science data file
-        File dataFile = SD.open("sci.csv", FILE_WRITE);
+          //open science data file
+          File dataFile = SD.open("sci.csv", FILE_WRITE);
         
-        //write values to science data file
-        dataFile.print(current_time);   //Milliseconds
-        dataFile.print(", ");
-        dataFile.print(altitude);       //Meters
-        dataFile.print(", ");
-        dataFile.print(uva);            //UV Count
-        dataFile.print(",");
-        dataFile.println(uvb);          //uW/cm^2
+          //write values to science data file
+          dataFile.print(current_time);   //Milliseconds
+          dataFile.print(", ");
+          dataFile.print(altitude);       //Meters
+          dataFile.print(", ");
+          dataFile.print(uva);            //UV Count
+          dataFile.print(",");
+          dataFile.println(uvb);          //uW/cm^2
         
-        //close science data file
-        dataFile.close();
+          //close science data file
+          dataFile.close();
 
-        //open housekeeping data file
-        File houseFile = SD.open("house.csv", FILE_WRITE);
+          //open housekeeping data file
+          File houseFile = SD.open("house.csv", FILE_WRITE);
 
-        //write values to housekeeping file
-        houseFile.print(current_time);
-        houseFile.print(",");
-        houseFile.println(int_temp);
+          //write values to housekeeping file
+          houseFile.print(current_time);
+          houseFile.print(",");
+          houseFile.println(int_temp);
         
-        //close housekeeping file
-        houseFile.close();
+          //close housekeeping file
+          houseFile.close();
 
-        //When balloon is above 26 kilometers go to FLOAT state
-        if(altitude >= 26000){
-          state = FLOAT;
-        }
+          //When balloon is above 26 kilometers go to FLOAT state
+          if(altitude >= 26000){
+            
+            Serial.println("Going to Float");
+            state = FLOAT;
+            
+          }
     }
 break;
 
@@ -320,52 +352,53 @@ break;
 //In Float state sample rate = 1hz
 //recording UVdata, altitude, time, external temp, internal temp and heater control voltage
 //will change to CHECK state once we are below 25kilometers
-    case FLOAT:
+
+case FLOAT:
      
       if ((millis() - previous_time) >= 1000){
         
           
-        //read all sensors
-        float altitude = dps.readAltitude(seaLevelhPa);
-        float current_time = millis();
-        float uva =ltr.readUVS();
-        float uvb = UVB.getUV();
-        float int_temp = rtc.getTemperature();
+          //read all sensors
+          altitude = dps.readAltitude(seaLevelhPa);
+          current_time = millis();
+          uva =ltr.readUVS();
+          uvb = UVB.getUV();
+          int_temp = rtc.getTemperature();
         
-        //set time to check for next sample 
-        previous_time = current_time;
+          //set time to check for next sample 
+          previous_time = current_time;
 
-        //open science data file
-        File dataFile = SD.open("sci.csv", FILE_WRITE);
+          //open science data file
+          File dataFile = SD.open("sci.csv", FILE_WRITE);
         
-        //write values to science data file
-        dataFile.print(current_time);   //Milliseconds
-        dataFile.print(", ");
-        dataFile.print(altitude);       //Meters
-        dataFile.print(", ");
-        dataFile.print(uva);            //UV Count
-        dataFile.print(",");
-        dataFile.println(uvb);          //uW/cm^2
+          //write values to science data file
+          dataFile.print(current_time);   //Milliseconds
+          dataFile.print(", ");
+          dataFile.print(altitude);       //Meters
+          dataFile.print(", ");
+          dataFile.print(uva);            //UV Count
+          dataFile.print(",");
+          dataFile.println(uvb);          //uW/cm^2
         
-        //close science data file
-        dataFile.close();
+          //close science data file
+          dataFile.close();
 
-        //open housekeeping data file
-        File houseFile = SD.open("house.csv", FILE_WRITE);
+          //open housekeeping data file
+          File houseFile = SD.open("house.csv", FILE_WRITE);
 
-        //write values to housekeeping file
-        houseFile.print(current_time);
-        houseFile.print(",");
-        houseFile.println(int_temp);
+          //write values to housekeeping file
+          houseFile.print(current_time);
+          houseFile.print(",");
+          houseFile.println(int_temp);
         
-        //close housekeeping file
-        houseFile.close();
+          //close housekeeping file
+          houseFile.close();
 
-        //When balloon is below 25 kilometers go to check state
-        if(altitude <= 25000){
-          timer = millis();
-          state = CHECK;
-        }
+          //When balloon is below 25 kilometers go to check state
+          if(altitude <= 25000){
+            timer = millis();
+            state = CHECK;
+          }
     }
 break;
 
@@ -374,118 +407,94 @@ break;
 //In CHECK state sample rate = 1hz
 //recording UVdata, altitude, time, external temp, internal temp and heater control voltage
 //will change to DESCEND state once we are below 25 kilometers and has been below 25 kilometers for 5 seconds  
-      case CHECK:
+
+case CHECK:
       
-      if ((millis() - previous_time) >= 1000){
-        
+        altitude = dps.readAltitude(seaLevelhPa);
+
+        //the balloon is below 25 km
+        if(altitude <= 25000){
+            
+            //balloon has been below 25km for more than 5 seconds indicating descent
+            if((millis() - timer) >= descent_timer){
+                
+                Serial.println("Going to Descent");
+                previous_time = millis(); 
+                state = DESCENT;    //change the state to the descent state
+                break;            //exits the loop and will be in descent state next loop
+            }
+            
+            else{
+                Serial.println("Staying in Check");
+                break;
+            }
+        }
+
+        //Balloon is back above 25km
+        else if(altitude >= 25000){ 
           
-        //read all sensors
-        float altitude = dps.readAltitude(seaLevelhPa);
-        float current_time = millis();
-        float uva =ltr.readUVS();
-        float uvb = UVB.getUV();
-        float int_temp = rtc.getTemperature();
-        
-        //set time to check for next sample 
-        previous_time = current_time;
-
-        //open science data file
-        File dataFile = SD.open("sci.csv", FILE_WRITE);
-        
-        //write values to science data file
-        dataFile.print(current_time);   //Milliseconds
-        dataFile.print(", ");
-        dataFile.print(altitude);       //Meters
-        dataFile.print(", ");
-        dataFile.print(uva);            //UV Count
-        dataFile.print(",");
-        dataFile.println(uvb);          //uW/cm^2
-        
-        //close science data file
-        dataFile.close();
-
-        //open housekeeping data file
-        File houseFile = SD.open("house.csv", FILE_WRITE);
-
-        //write values to housekeeping file
-        houseFile.print(current_time);
-        houseFile.print(",");
-        houseFile.println(int_temp);
-        
-        //close housekeeping file
-        houseFile.close();
-
-        //the balloon is below 25 km and has been for more than 5 seconds meaning the balloon is descending
-        if(((millis() - timer) >= descent_timer) && (altitude <= 25000)){
-          Serial.println("to descent");
-          state = DESCENT;    //change the state to the descent state
-          break;          //exits the loop and will be in descent state next loop
+            previous_time = millis();
+            Serial.println("Going back to float");
+            state = FLOAT;
+            break;
         }
-
-        //balloon is still below 25 km but has not been for more than 5 seconds meaning balloon may not be descending
-        else if(((millis() - timer) <= descent_timer) && (altitude <= 25000)){ 
-          Serial.println("stay in check");
-          break;//will remain in the while loop and continue to check the time and altitude
-        }
-        
-        //the altitude moves back up above 25 kMm (balloon is still in float)  
+         
         else{
-          Serial.println("back to float");
-          state = FLOAT;    //change the state to the FLOAT state
           break;
         }
-    }
+        
 
 //=========================================================================================================================================================================================
 //In DESCENT state sample rate = 16Hz, recording UVdata, altitude, time, external temp, internal temp and heater control voltage
 //will change to OFF state once we are below 1 kilometer
 
-      case DESCENT:
+case DESCENT:
 
       if ((millis() - previous_time) >= 62.5){
         
-          
-        //read all sensors
-        float altitude = dps.readAltitude(seaLevelhPa);
-        float current_time = millis();
-        float uva =ltr.readUVS();
-        float uvb = UVB.getUV();
-        float int_temp = rtc.getTemperature();
+          //read all sensors
+          altitude = dps.readAltitude(seaLevelhPa);
+          current_time = millis();
+          uva =ltr.readUVS();
+          uvb = UVB.getUV();
+          int_temp = rtc.getTemperature();
         
-        //set time to check for next sample 
-        previous_time = current_time;
+          //set time to check for next sample 
+          previous_time = current_time;
 
-        //open science data file
-        File dataFile = SD.open("sci.csv", FILE_WRITE);
+          //open science data file
+          File dataFile = SD.open("sci.csv", FILE_WRITE);
         
-        //write values to science data file
-        dataFile.print(current_time);   //Milliseconds
-        dataFile.print(", ");
-        dataFile.print(altitude);       //Meters
-        dataFile.print(", ");
-        dataFile.print(uva);            //UV Count
-        dataFile.print(",");
-        dataFile.println(uvb);          //uW/cm^2
+          //write values to science data file
+          dataFile.print(current_time);   //Milliseconds
+          dataFile.print(", ");
+          dataFile.print(altitude);       //Meters
+          dataFile.print(", ");
+          dataFile.print(uva);            //UV Count
+          dataFile.print(",");
+          dataFile.println(uvb);          //uW/cm^2
         
-        //close science data file
-        dataFile.close();
+          //close science data file
+          dataFile.close();
 
-        //open housekeeping data file
-        File houseFile = SD.open("house.csv", FILE_WRITE);
+          //open housekeeping data file
+          File houseFile = SD.open("house.csv", FILE_WRITE);
 
-        //write values to housekeeping file
-        houseFile.print(current_time);
-        houseFile.print(",");
-        houseFile.println(int_temp);
+          //write values to housekeeping file
+          houseFile.print(current_time);
+          houseFile.print(",");
+          houseFile.println(int_temp);
         
-        //close housekeeping file
-        houseFile.close();
+          //close housekeeping file
+          houseFile.close();
 
-        //When balloon is below 1 kilometer from the ground go to Off state
-        if(altitude <= (ground_altitude + 1000)){
-          Serial.println("OFF");
-          state = OFF;
-        }
+          //Balloon is 1 kilometer from the ground go to Off state
+          if(altitude <= (ground_altitude + 1000)){
+
+              Serial.println("Going to OFF");
+              state = OFF;
+              
+          }
     }
 break;
 
@@ -494,18 +503,24 @@ break;
 //=========================================================================================================================================================================================
 //In OFF state sampling has been turned off and will end the flight if the time has been long enough
       
-      case OFF:
+case OFF:
 
-        //check if the alarm has gone off
-        if (rtc.alarmFired(1)) {
-            //Turn off sensing
-            //stop all heating commands
-            //stop sensing by sending no commands
-        }
-        else {  /*if enough time has not passed to make sense for the balloon to be in the last part of 
+    current_time = millis();
+    //Check if balloon has logically been in flight long enough to be at this state
+    if ((current_time - start_time) >= projected_flight_time) {
+            
+        Serial.println("Staying in off");
+        //Turn off sensing
+        //stop all heating commands
+        //stop sensing by sending no commands
+    }
+    
+    else {  /*if enough time has not passed to make sense for the balloon to be in the last part of 
                 descent it will go back to the descent state and continue taking data*/
-            state = DESCENT;
-        }
-      break;
-  }
-}
+        Serial.println("Going back to Descent");
+        state = DESCENT;
+    }
+    
+break;
+
+}}
