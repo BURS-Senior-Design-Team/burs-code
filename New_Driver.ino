@@ -1,16 +1,18 @@
 
 #include "RTClib.h"             //RTC and Internal Thermistor Library
-#include <Adafruit_DPS310.h>
-#include <SPI.h>
-#include <SD.h>
-#include <LTR390.h>
-#include "guvbc31sm.h"
+#include <Adafruit_DPS310.h>    //altimeter
+#include <SPI.h>                //used for sd card reader
+#include <SD.h>                 //used for sd card reader
+#include <LTR390.h>             //uva
+#include "guvbc31sm.h"          //uvb
+#include <Adafruit_ADS1X15.h>   //uvc
 
 //Sensor Declarations
 RTC_DS3231 rtc;       //Real Time Clock
 Adafruit_DPS310 dps;  //Altimeter
 LTR390 ltr = LTR390();//UV-A Sensor
 GUVB UVB;             //UV-B Sensor
+Adafruit_ADS1115 ads; //UV-C Sensor
 
 //State Machine Setup
 enum State {ARM, GROUND, CLIMB, FLOAT, DESCENT, CHECK, OFF};  // Define the states
@@ -37,9 +39,9 @@ float current_time;
 float altitude;
 float uva;
 float uvb;
-float uvc;
+int16_t uvc;
 float int_temp;
-float ext_temp;
+int16_t ext_temp;
 
 //flags for determining connection
 bool sd_connected = false;
@@ -52,70 +54,72 @@ bool blink_off = true;
 bool led_off = true;
 
 void setup() {
-  Serial.begin(115200);
+    Serial.begin(115200);
 
-  //LED Pin declarations
-  pinMode(2, OUTPUT);         //rtc led indicator
-  pinMode(3, OUTPUT);         //uv-a led indicator
-  pinMode(4, OUTPUT);         //uv-b led indicator
-  pinMode(5, OUTPUT);         //uv-c led indicator
-  pinMode(6, OUTPUT);         //altimeter led indicator
-  pinMode(7, OUTPUT);         //sd reader/writer led indicator
-  
-  //connect to sd writer
-  pinMode(10, OUTPUT);//chipselect pin of 10
-  if (!SD.begin(10)) {
-    sd_connected = false;
-  }
-  else{
-    sd_connected = true;
-    digitalWrite(2,HIGH);
-  }
-  
-  //setup rtc
-  if(! rtc.begin()){
-    rtc_connected = false;
-  }
-  else{      
-    // Disable and clear both alarms
-    rtc.disableAlarm(1);
-    rtc.clearAlarm(1);
-    digitalWrite(3, HIGH);//turn on led to indicate connected
-    rtc_connected = true;
-  }
+    //LED Pin declarations
+    pinMode(2, OUTPUT);         //rtc led indicator
+    pinMode(3, OUTPUT);         //uv-a led indicator
+    pinMode(4, OUTPUT);         //uv-b led indicator
+    pinMode(5, OUTPUT);         //uv-c led indicator
+    pinMode(6, OUTPUT);         //altimeter led indicator
+    pinMode(7, OUTPUT);         //sd reader/writer led indicator
+    pinMode(10, OUTPUT);        //chipselect pin of 10
 
-  //setup uva sensor
-  if ( ! ltr.init() ) {
-    uva_connected = false;
-  }
-  else{     
-    ltr.setMode(LTR390_MODE_UVS); //set sensor to UV sensing mode
-    uva_connected = true;
-    digitalWrite(4,HIGH);
-  }
+    //Connect SD reader
+    if (!SD.begin(10)) {
+        sd_connected = false;
+    }
+    else{
+        sd_connected = true;
+        digitalWrite(2,HIGH);
+    }
+  
+    //setup rtc
+    if(! rtc.begin()){
+        rtc_connected = false;
+    }
+    else{      
+        digitalWrite(3, HIGH);//turn on led to indicate connected
+        rtc_connected = true;
+    }
 
-  //Connect uvb
-  if (!UVB.begin()){
-    uvb_connected = false;
-  }
-  else{
-    uvb_connected = true;
-    digitalWrite(5,HIGH);
-  }
+    //setup uva sensor
+    if ( ! ltr.init() ) {
+        uva_connected = false;
+    }
+    else{     
+        ltr.setMode(LTR390_MODE_UVS); //set sensor to UV sensing mode
+        uva_connected = true;
+        digitalWrite(4,HIGH);
+    }
+
+    //Connect uvb
+    if (!UVB.begin()){
+        uvb_connected = false;
+    }
+    else{
+        uvb_connected = true;
+        digitalWrite(5,HIGH);
+    }
   
-  //Connect uvc
-  uvc_connected = true;
-  digitalWrite(6,HIGH);
-  
-  //connect to altimeter
-  if (! dps.begin_I2C()) {
-    altimeter_connected = false;
-  }
-  else{
-    ground_altitude = dps.readAltitude(seaLevelhPa);  //store altitude of ground level for state machine control
-    altimeter_connected = true;
-    digitalWrite(7, HIGH);
-  }
+    //Connect uvc
+    if (!ads.begin()) {
+        uvc_connected = false;
+    }
+    else{
+        uvc_connected = true;
+        digitalWrite(6,HIGH);
+    }
+
+    //connect to altimeter
+    if (! dps.begin_I2C()) {
+        altimeter_connected = false;
+    }
+    else{
+        ground_altitude = dps.readAltitude(seaLevelhPa);  //store altitude of ground level for state machine control
+        altimeter_connected = true;
+        digitalWrite(7, HIGH);
+    }
 
   state = ARM;
   
@@ -124,90 +128,97 @@ void setup() {
 void loop() {
 switch (state) {
 
-//==========================================================================================================================================================================================
+//===============================================================================================================
 //In ARM state the sensor package is not sampling
 //this is inteneded to be a loop checking if all sensors are active and an sd card has been input
 //if there is a sensor not communicating check connections or that and sd card has been inserted
-    case ARM:
 
-  //if all sensors are connected and sd card inserted will move to ground and begin sampling data
-  if (sd_connected && rtc_connected && uva_connected && uvb_connected && uvc_connected && altimeter_connected) {
-    // Print flight date and time at startup
-    DateTime now = rtc.now(); // Get current time  
-    char buff[] = "Start time is hh:mm:ss DDD, DD MMM YYYY";
-    File time_stamp = SD.open("time.txt", FILE_WRITE);
-    time_stamp.println(now.toString(buff));  
-    time_stamp.close(); 
-    start_time = millis();
-    led_off = false;
-    state = GROUND;
-  }
+case ARM:
 
-  //try to connect to sd card again
-  else if (!sd_connected){
-    if (!SD.begin(10)){
-      sd_connected = false;
-      digitalWrite(2,LOW);
+    //All sensors are connected and sd card is inserted
+    if (sd_connected && rtc_connected && uva_connected && uvb_connected && uvc_connected && altimeter_connected) {
+    
+        // Log flight date and time at startup
+        DateTime now = rtc.now(); // Get current time  
+        char buff[] = "Start time is hh:mm:ss DDD, DD MMM YYYY";
+        File time_stamp = SD.open("time.txt", FILE_WRITE);
+        time_stamp.println(now.toString(buff));  
+        time_stamp.close(); 
+        start_time = millis();
+        led_off = false;
+        state = GROUND; //go to ground state
     }
-    else{
-      sd_connected = true;
-      digitalWrite(2,HIGH);
-    }
-  }
 
-  //try to connect to rtc again
-  else if(!rtc_connected){
-    if(! rtc.begin()){
-      rtc_connected = false;
-      digitalWrite(3,LOW);
+    //try to connect to SD READER again
+    else if (!sd_connected){
+        if (!SD.begin(10)){
+            sd_connected = false;
+            digitalWrite(2,LOW);
+        }
+        else{
+            sd_connected = true;
+            digitalWrite(2,HIGH);
+        }
     }
-    else{
-      // Disable and clear both alarms
-      rtc.disableAlarm(1);
-      rtc.clearAlarm(1);
-      rtc_connected = true;
-      digitalWrite(3, HIGH);//turn on led to indicate connected 
-    }
-  }
 
-  //try to connect to uva again
-  else if(!uva_connected){
-    if ( ! ltr.init() ) {
-      uva_connected = false;
-      digitalWrite(4,LOW);
+    //try to connect to RTC again
+    else if(!rtc_connected){
+        if(! rtc.begin()){
+            rtc_connected = false;
+            digitalWrite(3,LOW);
+        }
+        else{
+            rtc_connected = true;
+            digitalWrite(3, HIGH);//turn on led to indicate connected 
+        }
     }
-    else{
-      Serial.println("UV_A Sensor Connected");        
-      ltr.setMode(LTR390_MODE_UVS); //set sensor to UV sensing mode
-      uva_connected = true;
-      digitalWrite(4,HIGH);
-    }
-  }
 
-  //try to connect uvb again
-  else if (!uvb_connected){
-    if (!UVB.begin()){
-      uvb_connected = false;
+    //try to connect to UV-A again
+    else if(!uva_connected){
+        if ( ! ltr.init() ) {
+            uva_connected = false;
+            digitalWrite(4,LOW);
+        }
+        else{ 
+            ltr.setMode(LTR390_MODE_UVS); //set sensor to UV sensing mode
+            uva_connected = true;
+            digitalWrite(4,HIGH);
+        }
     }
-    else{
-      uvb_connected = true;
-      digitalWrite(5,HIGH);
+
+    //try to connect to UV-B again
+    else if (!uvb_connected){
+        if (!UVB.begin()){
+            uvb_connected = false;
+        }
+        else{
+            uvb_connected = true;
+            digitalWrite(5,HIGH);
+        }
     }
-  }
-  
-  //try to connect to altimeter again
-  else if (!altimeter_connected){
-      //connect to altimeter
-    if (! dps.begin_I2C()) {
-      altimeter_connected = false;
-      digitalWrite(7,LOW);
+
+    //try to connect to UV-C again
+    else if(!uvc_connected){
+        if (!ads.begin()) {
+            uvc_connected = false;
+        }
+        else{
+            uvc_connected = true;
+            digitalWrite(6,HIGH);
+        }
     }
-    else{
-      ground_altitude = dps.readAltitude(seaLevelhPa);  //store altitude of ground level for state machine control
-      altimeter_connected = true;
-      digitalWrite(7, HIGH);
-    }    
-  }
+
+    //try to connect to ALTIMETER again
+    else if (!altimeter_connected){
+        if (! dps.begin_I2C()) {
+            altimeter_connected = false;
+        }
+        else{
+            ground_altitude = dps.readAltitude(seaLevelhPa);  //store altitude of ground level for state machine control
+            altimeter_connected = true;
+            digitalWrite(7, HIGH);
+        }    
+    }
 
 break;
 //==========================================================================================================================================================================================
@@ -216,8 +227,8 @@ break;
 
 case GROUND:
 
-      //after being on for 10 minutes the leds will turn off
-      if((current_time-start_time) >= 30000){                  //set to 5 seconds for testing
+    //after being on for 10 minutes the leds will turn off
+    if((current_time-start_time) >= 30000){                  //set to 5 seconds for testing
         digitalWrite(2, LOW);
         digitalWrite(3, LOW);
         digitalWrite(4, LOW);
@@ -226,67 +237,74 @@ case GROUND:
         digitalWrite(7, LOW);
         digitalWrite(8, LOW);
         led_off = true;   
-      }
+    }
       
-      if ((millis() - previous_time) >= 1000){
+    if ((millis() - previous_time) >= 1000){
 
-          //read all sensors
-          altitude = dps.readAltitude(seaLevelhPa);
-          current_time = millis();
-          uva =ltr.readUVS();
-          uvb = UVB.getUV();
-          int_temp = rtc.getTemperature();
+        //read all sensors
+        altitude = dps.readAltitude(seaLevelhPa);
+        current_time = millis();
+        uva = ltr.readUVS();
+        uvb = UVB.getUV();
+        uvc = ads.readADC_SingleEnded(0);
+        int_temp = rtc.getTemperature();
+        ext_temp = ads.readADC_SingleEnded(1);
         
-          //set time to check for next sample 
-          previous_time = current_time;
+        //set time to check for next sample 
+        previous_time = current_time;
 
-          //open science data file
-          File dataFile = SD.open("sci.csv", FILE_WRITE);
+        //open science data file
+        File dataFile = SD.open("sci.csv", FILE_WRITE);
         
-          //write values to science data file
-          dataFile.print(current_time);   //Milliseconds
-          dataFile.print(", ");
-          dataFile.print(altitude);       //Meters
-          dataFile.print(", ");
-          dataFile.print(uva);            //UV Count
-          dataFile.print(",");
-          dataFile.println(uvb);          //uW/cm^2
+        //write values to science data file
+        dataFile.print(current_time);   //Milliseconds
+        dataFile.print(", ");
+        dataFile.print(altitude);       //Meters
+        dataFile.print(", ");
+        dataFile.print(uva);            //UV Count
+        dataFile.print(",");
+        dataFile.println(uvb);          //UV Count
+        dataFile.print("'");
+        dataFile.println(uvc);          //voltage
         
-          //close science data file
-          dataFile.close();
+        //close science data file
+        dataFile.close();
 
-          //open housekeeping data file
-          File houseFile = SD.open("house.csv", FILE_WRITE);
-
-          //write values to housekeeping file
-          houseFile.print(current_time);
-          houseFile.print(",");
-          houseFile.println(int_temp);
+        //open housekeeping data file
+        File houseFile = SD.open("house.csv", FILE_WRITE);
+        //write values to housekeeping file
+        houseFile.print(current_time);
+        houseFile.print(",");
+        houseFile.println(int_temp);
+        houseFile.print("'");
+        houseFile.print(ext_temp);
         
-          //close housekeeping file
-          houseFile.close();
+        //close housekeeping file
+        houseFile.close();
 
-          //"heart beat" led function
-          if (led_off = true){
+        //"heart beat" led function
+        if (led_off = true){
             
             if (blink_off = false){
-              digitalWrite(8,HIGH);
-              blink_off = true;
+                digitalWrite(8,HIGH);
+                blink_off = true;
             }
-            
             else if(blink_off = true){
-            digitalWrite(8,LOW);
-            blink_off = false;         
+                digitalWrite(8,LOW);
+                blink_off = false;         
             }
-          }
+            else{
+                return;
+            }
+        }
 
-          //When balloon is 30 meters above the ground move to climb state and set alarm for determining
-          //if balloon has been in flight long enough to stop reading files
-          if(altitude >= (ground_altitude + 30)){
+        //When balloon is 30 meters above the ground move to climb state and set alarm for determining
+        //if balloon has been in flight long enough to stop reading files
+        if(altitude >= (ground_altitude + 30)){            
             flight_start = current_time;
             digitalWrite(8, LOW);
             state = CLIMB;
-          }
+        }
     }
 break;
 
@@ -303,9 +321,11 @@ case CLIMB:
           //read all sensors
           altitude = dps.readAltitude(seaLevelhPa);
           current_time = millis();
-          uva =ltr.readUVS();
+          uva = ltr.readUVS();
           uvb = UVB.getUV();
+          uvc = ads.readADC_SingleEnded(0);
           int_temp = rtc.getTemperature();
+          ext_temp = ads.readADC_SingleEnded(1);
         
           //set time to check for next sample 
           previous_time = current_time;
@@ -320,28 +340,29 @@ case CLIMB:
           dataFile.print(", ");
           dataFile.print(uva);            //UV Count
           dataFile.print(",");
-          dataFile.println(uvb);          //uW/cm^2
+          dataFile.println(uvb);          //UV Count
+          dataFile.print("'");
+          dataFile.println(uvc);          //voltage
         
           //close science data file
           dataFile.close();
 
           //open housekeeping data file
           File houseFile = SD.open("house.csv", FILE_WRITE);
-
           //write values to housekeeping file
           houseFile.print(current_time);
           houseFile.print(",");
           houseFile.println(int_temp);
+          houseFile.print("'");
+          houseFile.print(ext_temp);
         
           //close housekeeping file
           houseFile.close();
 
           //When balloon is above 26 kilometers go to FLOAT state
-          if(altitude >= 26000){
-            
-            Serial.println("Going to Float");
-            state = FLOAT;
-            
+          if(altitude >= 26000){            
+              Serial.println("Going to Float");
+              state = FLOAT;            
           }
     }
 break;
@@ -355,15 +376,16 @@ break;
 
 case FLOAT:
      
-      if ((millis() - previous_time) >= 1000){
-        
+      if ((millis() - previous_time) >= 1000){        
           
           //read all sensors
           altitude = dps.readAltitude(seaLevelhPa);
           current_time = millis();
-          uva =ltr.readUVS();
+          uva = ltr.readUVS();
           uvb = UVB.getUV();
+          uvc = ads.readADC_SingleEnded(0);
           int_temp = rtc.getTemperature();
+          ext_temp = ads.readADC_SingleEnded(1);
         
           //set time to check for next sample 
           previous_time = current_time;
@@ -378,26 +400,29 @@ case FLOAT:
           dataFile.print(", ");
           dataFile.print(uva);            //UV Count
           dataFile.print(",");
-          dataFile.println(uvb);          //uW/cm^2
+          dataFile.println(uvb);          //UV Count
+          dataFile.print("'");
+          dataFile.println(uvc);          //voltage
         
           //close science data file
           dataFile.close();
 
           //open housekeeping data file
           File houseFile = SD.open("house.csv", FILE_WRITE);
-
           //write values to housekeeping file
           houseFile.print(current_time);
           houseFile.print(",");
           houseFile.println(int_temp);
+          houseFile.print("'");
+          houseFile.print(ext_temp);
         
           //close housekeeping file
           houseFile.close();
 
           //When balloon is below 25 kilometers go to check state
           if(altitude <= 25000){
-            timer = millis();
-            state = CHECK;
+                timer = millis(); //start a timer to check if balloon is truely descending
+                state = CHECK;
           }
     }
 break;
@@ -416,8 +441,7 @@ case CHECK:
         if(altitude <= 25000){
             
             //balloon has been below 25km for more than 5 seconds indicating descent
-            if((millis() - timer) >= descent_timer){
-                
+            if((millis() - timer) >= descent_timer){                
                 Serial.println("Going to Descent");
                 previous_time = millis(); 
                 state = DESCENT;    //change the state to the descent state
@@ -455,9 +479,11 @@ case DESCENT:
           //read all sensors
           altitude = dps.readAltitude(seaLevelhPa);
           current_time = millis();
-          uva =ltr.readUVS();
+          uva = ltr.readUVS();
           uvb = UVB.getUV();
+          uvc = ads.readADC_SingleEnded(0);
           int_temp = rtc.getTemperature();
+          ext_temp = ads.readADC_SingleEnded(1);
         
           //set time to check for next sample 
           previous_time = current_time;
@@ -472,18 +498,21 @@ case DESCENT:
           dataFile.print(", ");
           dataFile.print(uva);            //UV Count
           dataFile.print(",");
-          dataFile.println(uvb);          //uW/cm^2
+          dataFile.println(uvb);          //UV Count
+          dataFile.print("'");
+          dataFile.println(uvc);          //voltage
         
           //close science data file
           dataFile.close();
 
           //open housekeeping data file
           File houseFile = SD.open("house.csv", FILE_WRITE);
-
           //write values to housekeeping file
           houseFile.print(current_time);
           houseFile.print(",");
           houseFile.println(int_temp);
+          houseFile.print("'");
+          houseFile.print(ext_temp);
         
           //close housekeeping file
           houseFile.close();
