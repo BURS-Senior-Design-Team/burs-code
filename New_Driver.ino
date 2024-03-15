@@ -63,6 +63,7 @@ void setup() {
     pinMode(5, OUTPUT);         //uv-c led indicator
     pinMode(6, OUTPUT);         //altimeter led indicator
     pinMode(7, OUTPUT);         //sd reader/writer led indicator
+    pinMode(9, OUTPUT);         //pin for controling heater relay
     pinMode(10, OUTPUT);        //chipselect pin of 10
 
     //Connect SD reader
@@ -126,6 +127,7 @@ void setup() {
 }
 
 void loop() {
+DateTime now = rtc.now(); // Get current time 
 switch (state) {
 
 //===============================================================================================================
@@ -138,8 +140,7 @@ case ARM:
     //All sensors are connected and sd card is inserted
     if (sd_connected && rtc_connected && uva_connected && uvb_connected && uvc_connected && altimeter_connected) {
     
-        // Log flight date and time at startup
-        DateTime now = rtc.now(); // Get current time  
+        // Log flight date and time at startup 
         char buff[] = "Start time is hh:mm:ss DDD, DD MMM YYYY";
         File time_stamp = SD.open("time.txt", FILE_WRITE);
         time_stamp.println(now.toString(buff));  
@@ -227,8 +228,8 @@ break;
 
 case GROUND:
 
-    //after being on for 10 minutes the leds will turn off
-    if((current_time-start_time) >= 30000){                  //set to 5 seconds for testing
+    //Loop has run for 30 seconds
+    if((current_time-start_time) >= 30000){
         digitalWrite(2, LOW);
         digitalWrite(3, LOW);
         digitalWrite(4, LOW);
@@ -236,7 +237,7 @@ case GROUND:
         digitalWrite(6, LOW);
         digitalWrite(7, LOW);
         digitalWrite(8, LOW);
-        led_off = true;   
+        led_off = true;       //turn off all leds
     }
       
     if ((millis() - previous_time) >= 1000){
@@ -286,7 +287,7 @@ case GROUND:
         if (led_off = true){
             
             if (blink_off = false){
-                digitalWrite(8,HIGH);
+                digitalWrite(8,HIGH); //pin 8, green led is the heart beat indicator
                 blink_off = true;
             }
             else if(blink_off = true){
@@ -364,6 +365,14 @@ case CLIMB:
               Serial.println("Going to Float");
               state = FLOAT;            
           }
+
+          //heater control loop turn on heater if internal temp is read to be less than 0 degrees c
+          if(int_temp <= 0){
+            digitalWrite(9, HIGH);
+          }
+          if(int_temp >= 0){
+            digitalWrite(9, LOW);
+          }
     }
 break;
 
@@ -423,6 +432,14 @@ case FLOAT:
           if(altitude <= 25000){
                 timer = millis(); //start a timer to check if balloon is truely descending
                 state = CHECK;
+          }
+
+          //heater control loop turn on heater if internal temp is read to be less than 0 degrees c
+          if(int_temp <= 0){
+            digitalWrite(9, HIGH);
+          }
+          if(int_temp >= 0){
+            digitalWrite(9, LOW);
           }
     }
 break;
@@ -519,12 +536,19 @@ case DESCENT:
 
           //Balloon is 1 kilometer from the ground go to Off state
           if(altitude <= (ground_altitude + 1000)){
-
               Serial.println("Going to OFF");
-              state = OFF;
-              
+              state = OFF;        
+          }
+          
+          //heater control loop turn on heater if internal temp is read to be less than 0 degrees c
+          if(int_temp <= 0){
+            digitalWrite(9, HIGH);
+          }
+          if(int_temp >= 0){
+            digitalWrite(9, LOW);
           }
     }
+    
 break;
 
 
@@ -536,7 +560,7 @@ case OFF:
 
     current_time = millis();
     //Check if balloon has logically been in flight long enough to be at this state
-    if ((current_time - start_time) >= projected_flight_time) {
+    if ((current_time - flight_start) >= projected_flight_time) {
             
         Serial.println("Staying in off");
         //Turn off sensing
