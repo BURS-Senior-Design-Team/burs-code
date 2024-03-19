@@ -57,6 +57,7 @@ void setup() {
     Serial.begin(115200);
 
     //LED Pin declarations
+    pinMode(1, OUTPUT);         // blinking led indicator
     pinMode(2, OUTPUT);         //rtc led indicator
     pinMode(3, OUTPUT);         //uv-a led indicator
     pinMode(4, OUTPUT);         //uv-b led indicator
@@ -230,13 +231,14 @@ case GROUND:
 
     //Loop has run for 30 seconds
     if((current_time-start_time) >= 30000){
+        digitalWrite(1, LOW);
         digitalWrite(2, LOW);
         digitalWrite(3, LOW);
         digitalWrite(4, LOW);
         digitalWrite(5, LOW);
         digitalWrite(6, LOW);
         digitalWrite(7, LOW);
-        digitalWrite(8, LOW);
+        //digitalWrite(8, LOW);
         led_off = true;       //turn off all leds
     }
       
@@ -287,11 +289,13 @@ case GROUND:
         if (led_off = true){
             
             if (blink_off = false){
-                digitalWrite(8,HIGH); //pin 8, green led is the heart beat indicator
+                digitalWrite(1,HIGH); //pin 1, green led is the heart beat indicator
+                //digitalWrite(8,HIGH); //pin 8, green led is the heart beat indicator
                 blink_off = true;
             }
             else if(blink_off = true){
-                digitalWrite(8,LOW);
+                digitalWrite(1,LOW);
+                //digitalWrite(8,LOW);
                 blink_off = false;         
             }
             else{
