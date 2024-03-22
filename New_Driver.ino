@@ -51,19 +51,17 @@ bool uvb_connected = false;
 bool uvc_connected = false;
 bool altimeter_connected = false;
 bool blink_off = true;
-bool led_off = true;
 
 void setup() {
-    Serial.begin(115200);
 
     //LED Pin declarations
-    pinMode(1, OUTPUT);         // blinking led indicator
-    pinMode(2, OUTPUT);         //rtc led indicator
-    pinMode(3, OUTPUT);         //uv-a led indicator
-    pinMode(4, OUTPUT);         //uv-b led indicator
-    pinMode(5, OUTPUT);         //uv-c led indicator
-    pinMode(6, OUTPUT);         //altimeter led indicator
-    pinMode(7, OUTPUT);         //sd reader/writer led indicator
+    pinMode(1, OUTPUT);         //Heartbeat LED
+    pinMode(2, OUTPUT);         //SD led indicator
+    pinMode(3, OUTPUT);         //RTC led indicator
+    pinMode(4, OUTPUT);         //uv-a led indicator
+    pinMode(5, OUTPUT);         //uv-b led indicator
+    pinMode(6, OUTPUT);         //uv-c led indicator
+    pinMode(7, OUTPUT);         //altimeter led indicator
     pinMode(9, OUTPUT);         //pin for controling heater relay
     pinMode(10, OUTPUT);        //chipselect pin of 10
 
@@ -145,9 +143,8 @@ case ARM:
         char buff[] = "Start time is hh:mm:ss DDD, DD MMM YYYY";
         File time_stamp = SD.open("time.txt", FILE_WRITE);
         time_stamp.println(now.toString(buff));  
-        time_stamp.close(); 
+        time_stamp.close();
         start_time = millis();
-        led_off = false;
         state = GROUND; //go to ground state
     }
 
@@ -231,15 +228,13 @@ case GROUND:
 
     //Loop has run for 30 seconds
     if((current_time-start_time) >= 30000){
-        digitalWrite(1, LOW);
         digitalWrite(2, LOW);
         digitalWrite(3, LOW);
         digitalWrite(4, LOW);
         digitalWrite(5, LOW);
         digitalWrite(6, LOW);
         digitalWrite(7, LOW);
-        //digitalWrite(8, LOW);
-        led_off = true;       //turn off all leds
+        digitalWrite(8, LOW);
     }
       
     if ((millis() - previous_time) >= 1000){
@@ -248,8 +243,9 @@ case GROUND:
         altitude = dps.readAltitude(seaLevelhPa);
         current_time = millis();
         uva = ltr.readUVS();
-        uvb = UVB.getUV();
+        uvb = UVB.readUVB();
         uvc = ads.readADC_SingleEnded(0);
+        //uvc = ads.computeVolts(uvc_results);
         int_temp = rtc.getTemperature();
         ext_temp = ads.readADC_SingleEnded(1);
         
@@ -266,10 +262,9 @@ case GROUND:
         dataFile.print(", ");
         dataFile.print(uva);            //UV Count
         dataFile.print(",");
-        dataFile.println(uvb);          //UV Count
-        dataFile.print("'");
+        dataFile.print(uvb);          //UV Count
+        dataFile.print(",");
         dataFile.println(uvc);          //voltage
-        
         //close science data file
         dataFile.close();
 
@@ -278,36 +273,32 @@ case GROUND:
         //write values to housekeeping file
         houseFile.print(current_time);
         houseFile.print(",");
-        houseFile.println(int_temp);
-        houseFile.print("'");
-        houseFile.print(ext_temp);
+        houseFile.print(int_temp);
+        houseFile.print(",");
+        houseFile.println(ext_temp);
         
         //close housekeeping file
         houseFile.close();
 
         //"heart beat" led function
-        if (led_off = true){
-            
-            if (blink_off = false){
-                digitalWrite(1,HIGH); //pin 1, green led is the heart beat indicator
-                //digitalWrite(8,HIGH); //pin 8, green led is the heart beat indicator
+        if (blink_off == false){
+                digitalWrite(1,HIGH); //pin 8, green led is the heart beat indicator
                 blink_off = true;
             }
-            else if(blink_off = true){
+            else if(blink_off == true){
                 digitalWrite(1,LOW);
-                //digitalWrite(8,LOW);
                 blink_off = false;         
             }
             else{
                 return;
             }
-        }
+        
 
         //When balloon is 30 meters above the ground move to climb state and set alarm for determining
         //if balloon has been in flight long enough to stop reading files
         if(altitude >= (ground_altitude + 30)){            
             flight_start = current_time;
-            digitalWrite(8, LOW);
+            digitalWrite(1, LOW);
             state = CLIMB;
         }
     }
@@ -327,11 +318,13 @@ case CLIMB:
           altitude = dps.readAltitude(seaLevelhPa);
           current_time = millis();
           uva = ltr.readUVS();
-          uvb = UVB.getUV();
+          uvb = UVB.readUVB();
           uvc = ads.readADC_SingleEnded(0);
+          //uvc = ads.computeVolts(uvc_results);
           int_temp = rtc.getTemperature();
           ext_temp = ads.readADC_SingleEnded(1);
-        
+          //ext_temp = ads.computeVolts(ext_temp_resulsts);
+          
           //set time to check for next sample 
           previous_time = current_time;
 
@@ -395,10 +388,12 @@ case FLOAT:
           altitude = dps.readAltitude(seaLevelhPa);
           current_time = millis();
           uva = ltr.readUVS();
-          uvb = UVB.getUV();
+          uvb = UVB.readUVB();
           uvc = ads.readADC_SingleEnded(0);
+          //uvc = ads.computeVolts(uvc_results);
           int_temp = rtc.getTemperature();
           ext_temp = ads.readADC_SingleEnded(1);
+          //ext_temp = ads.computeVolts(ext_temp_resulsts);
         
           //set time to check for next sample 
           previous_time = current_time;
@@ -501,10 +496,12 @@ case DESCENT:
           altitude = dps.readAltitude(seaLevelhPa);
           current_time = millis();
           uva = ltr.readUVS();
-          uvb = UVB.getUV();
+          uvb = UVB.readUVB();
           uvc = ads.readADC_SingleEnded(0);
+          //uvc = ads.computeVolts(uvc_results);
           int_temp = rtc.getTemperature();
           ext_temp = ads.readADC_SingleEnded(1);
+          //ext_temp = ads.computeVolts(ext_temp_resulsts);
         
           //set time to check for next sample 
           previous_time = current_time;
