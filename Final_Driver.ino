@@ -57,8 +57,8 @@ bool blink_off = true;
 void getdata(){
   current_time = millis();
   altitude = alt.readAltitude(seaLevelhPa);
-  UV_A = uva.readUVA();
-  UV_B = uvb.readUVB();
+  UV_A = uva.getUVI();
+  UV_B = uvb.getUVIndex();
   UV_C = adc.readADC_SingleEnded(0);
   int_temp = rtc.getTemperature();
   ext_temp = adc.readADC_SingleEnded(1);

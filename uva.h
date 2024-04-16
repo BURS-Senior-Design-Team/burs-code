@@ -4,6 +4,10 @@
 #include "Arduino.h"
 #include <Wire.h>
 
+#define UV_SENSITIVITY  1400
+
+#define WFAC            1
+
 #define LTR390_ADDRESS 0x53         ///< I2C address
 #define LTR390_MAIN_CTRL 0x00       ///< Main control register
 #define LTR390_MEAS_RATE 0x04       ///< Resolution and data rate
@@ -33,6 +37,24 @@
 //#define  UVA_RESOLUTION 4  //16 bit = 25ms conversion time
 //#define  UVA_RESOLUTION 5  //13 bit = 12.5ms conversion time
 
+/*!    @brief  Sensor gain for UV or ALS  */
+typedef enum {
+  LTR390_GAIN_1 = 0,
+  LTR390_GAIN_3,
+  LTR390_GAIN_6,
+  LTR390_GAIN_9,
+  LTR390_GAIN_18,
+} ltr390_gain_t;
+
+/*!    @brief Measurement resolution (higher res means slower reads!)  */
+typedef enum {
+  LTR390_RESOLUTION_20BIT,
+  LTR390_RESOLUTION_19BIT,
+  LTR390_RESOLUTION_18BIT,
+  LTR390_RESOLUTION_17BIT,
+  LTR390_RESOLUTION_16BIT,
+  LTR390_RESOLUTION_13BIT,
+} ltr390_resolution_t;
 
 
 class UVA{
@@ -46,7 +68,14 @@ public:
   void enable(bool en);
   bool enabled(void);
 
+  void setGain(ltr390_gain_t gain);
+  ltr390_gain_t getGain(void);
+
+  void setResolution(ltr390_resolution_t res);
+  ltr390_resolution_t getResolution(void);
+
   uint32_t readUVA(void);
+  float getUVI();
 
   uint8_t writeRegister(uint8_t reg, uint8_t val);
   uint8_t readRegister(uint8_t reg);

@@ -33,8 +33,8 @@
 #include <Arduino.h>
 #include <Wire.h>
 
-class UVB
-{
+class UVB{
+  
   public:
     UVB();
     bool init();
@@ -44,13 +44,14 @@ class UVB
     byte readRegister(uint8_t);
     void readRegisters(uint8_t, uint8_t*, uint8_t);
 
+    float getUVIndex();
     uint16_t readUVB();
 
   private:
     TwoWire *_wire;
     int i2cAddress;
     uint8_t _offset = 0;
-    unsigned short _b_scale = 0;
+    uint8_t _b_scale = 0;
 };
 
 #endif

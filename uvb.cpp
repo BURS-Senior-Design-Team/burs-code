@@ -39,6 +39,13 @@ uint16_t UVB::readUVB()
     return (unsigned short)buf[0] | ((unsigned short)buf[1] << 8);
 }
 
+float UVB::getUVIndex()
+{
+    unsigned short raw = readUVB();
+    //return (raw-_offset)*(float)_b_scale;
+    return raw;
+}
+
 // WRITE A SINGLE REGISTER
 void UVB::writeRegister(uint8_t reg, uint8_t data)
 {
